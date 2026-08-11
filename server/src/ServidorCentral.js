@@ -6,8 +6,9 @@ const Pacote = require('./models/Pacote');
  *
  * Responsabilidades:
  *  - Receber notificações dos CelularUsuario via Socket.IO
- *  - Rotear mensagens conforme o tipo do Pacote (PUBLICO ou PRIVADO)
+ *  - Rotear mensagens conforme o tipo do Pacote (PUBLICO, PRIVADO, GRUPO)
  *  - Manter lista de usuários conectados
+ *  - Gerenciar grupos criados pelos usuários
  */
 class ServidorCentral extends Observador {
   /**
@@ -18,6 +19,8 @@ class ServidorCentral extends Observador {
     this.io = io;
     // Map<socketId, nome> — registro de usuários conectados
     this.usuariosConectados = new Map();
+    // Map<grupoId, { nome, membros: string[], criador: string }> — grupos
+    this.grupos = new Map();
     this._configurarEventos();
     console.log('✅ [ServidorCentral] Inicializado — aguardando conexões de CelularUsuario...');
   }
@@ -32,17 +35,31 @@ class ServidorCentral extends Observador {
         this.usuariosConectados.set(socket.id, nome);
         console.log(`👤 [ServidorCentral] Usuário registrado: "${nome}" (${socket.id})`);
         this._transmitirListaUsuarios();
+
+        // Envia lista de grupos existentes para o novo usuário
+        socket.emit('lista_grupos', this._serializarGrupos());
+
         // Notifica demais usuários
         socket.broadcast.emit('sistema_mensagem', {
           texto: `${nome} entrou no chat`,
           tipo: 'ENTRADA',
           timestamp: new Date().toISOString(),
         });
+
+        // Mensagem secreta de boas-vindas no Canal Geral
+        setTimeout(() => {
+          const msgSecreta = new Pacote({
+            texto: `🔐 [Mensagem Secreta do Servidor] Olá, ${nome}! Bem-vindo ao ChatApp. Este sistema usa os padrões Observer + Strategy. Suas mensagens privadas são entregues com EnvioPrivado e nunca passam por outros usuários. Bom chat! 🎉`,
+            remetente: '🤖 ServidorCentral',
+            destinatarios: [nome],
+            tipo: 'SISTEMA_SECRETO',
+          });
+          socket.emit('mensagem_secreta_geral', msgSecreta.toJSON());
+        }, 800);
       });
 
       /**
        * Evento principal: CelularUsuario chama notificarServidor(pacote)
-       * O servidor recebe como 'notificar_servidor' e chama receberNotificacao()
        */
       socket.on('notificar_servidor', (dadosPacote) => {
         const pacote = new Pacote(dadosPacote);
@@ -50,6 +67,55 @@ class ServidorCentral extends Observador {
           `📦 [ServidorCentral] Pacote recebido de "${pacote.remetente}" — Tipo: ${pacote.tipo}`
         );
         this.receberNotificacao(pacote, socket);
+      });
+
+      // Criar grupo
+      socket.on('criar_grupo', ({ nome, membros }) => {
+        const remetente = this.usuariosConectados.get(socket.id);
+        if (!remetente) return;
+
+        const grupoId = `grupo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const todosMembros = [...new Set([remetente, ...membros])];
+
+        this.grupos.set(grupoId, {
+          id: grupoId,
+          nome,
+          membros: todosMembros,
+          criador: remetente,
+          criadoEm: new Date().toISOString(),
+        });
+
+        console.log(`👥 [ServidorCentral] Grupo criado: "${nome}" — Membros: [${todosMembros.join(', ')}]`);
+
+        // Notifica todos os membros do novo grupo
+        const grupoInfo = this.grupos.get(grupoId);
+        this.usuariosConectados.forEach((nomeMembro, socketId) => {
+          if (todosMembros.includes(nomeMembro)) {
+            this.io.to(socketId).emit('grupo_criado', grupoInfo);
+          }
+        });
+      });
+
+      // Mensagem de grupo
+      socket.on('mensagem_grupo', (dadosPacote) => {
+        const grupo = this.grupos.get(dadosPacote.grupoId);
+        if (!grupo) return;
+
+        const pacote = {
+          ...dadosPacote,
+          tipo: 'GRUPO',
+          timestamp: new Date().toISOString(),
+          id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        };
+
+        console.log(`👥 [ServidorCentral] Mensagem de grupo "${grupo.nome}" de "${dadosPacote.remetente}"`);
+
+        // Entrega só para membros do grupo
+        this.usuariosConectados.forEach((nome, socketId) => {
+          if (grupo.membros.includes(nome)) {
+            this.io.to(socketId).emit('mensagem_recebida', pacote);
+          }
+        });
       });
 
       // Desconexão
@@ -71,23 +137,15 @@ class ServidorCentral extends Observador {
 
   /**
    * receberNotificacao(pacote) — implementação da interface Observador
-   * Ponto de entrada para todas as mensagens dos clientes
-   *
-   * @param {Pacote} pacote
-   * @param {import('socket.io').Socket} socketRemetente
    */
   receberNotificacao(pacote, socketRemetente) {
     this._rotearMensagem(pacote, socketRemetente);
   }
 
   /**
-   * Método privado — roteia o pacote conforme a estratégia aplicada pelo CelularUsuario
-   *
-   * PUBLICO  → broadcast para todos os usuários conectados
-   * PRIVADO  → entrega somente para os destinatários listados no pacote
-   *
-   * @param {Pacote} pacote
-   * @param {import('socket.io').Socket} socketRemetente
+   * Roteia o pacote conforme a estratégia aplicada pelo CelularUsuario
+   * PUBLICO  → broadcast para todos
+   * PRIVADO  → entrega somente para os destinatários
    */
   _rotearMensagem(pacote, socketRemetente) {
     if (pacote.tipo === 'PUBLICO') {
@@ -97,9 +155,7 @@ class ServidorCentral extends Observador {
       console.log(
         `🔒 [ServidorCentral] Roteando PRIVADO → destinatários: [${pacote.destinatarios.join(', ')}]`
       );
-      // Envia confirmação ao remetente
       socketRemetente.emit('mensagem_recebida', pacote.toJSON());
-      // Entrega a cada destinatário
       this.usuariosConectados.forEach((nome, socketId) => {
         if (pacote.destinatarios.includes(nome) && socketId !== socketRemetente.id) {
           this.io.to(socketId).emit('mensagem_recebida', pacote.toJSON());
@@ -115,6 +171,11 @@ class ServidorCentral extends Observador {
       nome,
     }));
     this.io.emit('lista_usuarios', usuarios);
+  }
+
+  /** Serializa grupos para envio ao cliente */
+  _serializarGrupos() {
+    return Array.from(this.grupos.values());
   }
 }
 

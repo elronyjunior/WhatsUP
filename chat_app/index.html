@@ -15,7 +15,6 @@
 ════════════════════════════════════════════ -->
 <div id="login-screen">
   <div class="login-card">
-
     <div class="login-logo">
       <div class="login-logo-icon">💬</div>
       <h1>ChatApp</h1>
@@ -44,7 +43,6 @@
       <span class="pattern-badge observer">🔔 Observer</span>
       <span class="pattern-badge strategy">⚡ Strategy</span>
     </div>
-
   </div>
 </div>
 
@@ -53,8 +51,10 @@
 ════════════════════════════════════════════ -->
 <div id="chat-screen" class="hidden">
 
-  <!-- SIDEBAR -->
+  <!-- ─── SIDEBAR ─── -->
   <aside class="sidebar">
+
+    <!-- Header da Sidebar -->
     <div class="sidebar-header">
       <div class="sidebar-brand">
         <div class="brand-icon">💬</div>
@@ -66,19 +66,40 @@
           <div class="perfil-nome" id="nome-usuario">Usuário</div>
           <div class="perfil-status">Online</div>
         </div>
+        <!-- Botão criar grupo -->
+        <button id="btn-criar-grupo" class="btn-novo-grupo" title="Criar novo grupo">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <line x1="19" y1="8" x2="19" y2="14"/>
+            <line x1="22" y1="11" x2="16" y2="11"/>
+          </svg>
+        </button>
       </div>
     </div>
 
-    <div class="sidebar-section-title">
-      Usuários Online
-      <span class="usuarios-count-badge" id="usuarios-count">0</span>
+    <!-- Busca -->
+    <div class="sidebar-search">
+      <div class="search-wrap">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input
+          id="busca-conversa"
+          type="text"
+          placeholder="Buscar conversa..."
+          autocomplete="off"
+        />
+      </div>
     </div>
 
-    <div class="lista-usuarios-scroll">
-      <div id="lista-usuarios"></div>
+    <!-- Lista de Conversas -->
+    <div class="conversas-scroll">
+      <div class="conversas-section-title">Conversas</div>
+      <div id="lista-conversas"></div>
     </div>
 
-    <!-- Painel de padrões -->
+    <!-- Padrões -->
     <div class="sidebar-patterns">
       <div class="pattern-item">
         <div class="pattern-dot observer"></div>
@@ -91,41 +112,29 @@
         <span class="pattern-name strategy">Strategy</span>
       </div>
     </div>
+
   </aside>
 
-  <!-- CHAT AREA -->
+  <!-- ─── CHAT AREA ─── -->
   <main class="chat-area">
 
-    <!-- Chat Header -->
-    <header class="chat-header">
+    <!-- Header dinâmico -->
+    <header class="chat-header" id="chat-header">
       <div class="chat-header-left">
-        <div class="chat-channel-icon">🌐</div>
+        <div class="chat-channel-icon geral" id="header-icon">🌐</div>
         <div>
-          <div class="chat-channel-name">Canal Geral</div>
-          <div class="chat-channel-sub">ServidorCentral (Observer) — todos os usuários</div>
+          <div class="chat-channel-name" id="header-nome">Canal Geral</div>
+          <div class="chat-channel-sub" id="header-sub">ServidorCentral (Observer) — todos os usuários</div>
         </div>
       </div>
       <span id="badge-estrategia" class="badge-estrategia publico">PÚBLICO</span>
     </header>
 
-    <!-- Messages -->
-    <div id="messages-container" role="log" aria-live="polite" aria-label="Mensagens do chat">
-      <!-- Mensagens renderizadas via JS -->
-    </div>
+    <!-- Mensagens -->
+    <div id="messages-container" role="log" aria-live="polite" aria-label="Mensagens do chat"></div>
 
-    <!-- Input Area -->
+    <!-- Input -->
     <div id="input-area">
-
-      <!-- Seletor de Destinatários (Privado) -->
-      <div id="seletor-destinatarios" class="hidden">
-        <div class="seletor-titulo">
-          🔒 Selecionar destinatários
-        </div>
-        <div id="checkboxes-destinatarios">
-          <!-- Checkboxes renderizados via JS -->
-        </div>
-      </div>
-
       <div class="input-row">
         <textarea
           id="msg-input"
@@ -133,21 +142,6 @@
           rows="1"
           aria-label="Campo de mensagem"
         ></textarea>
-
-        <button
-          id="btn-toggle-estrategia"
-          class="btn-toggle-estrategia"
-          title="Alternar entre EnvioPublico e EnvioPrivado (Padrão Strategy)"
-          aria-label="Alternar estratégia de envio"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="2" y1="12" x2="22" y2="12"/>
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-          </svg>
-          Público
-        </button>
-
         <button id="btn-enviar" class="btn-enviar" title="Enviar mensagem" aria-label="Enviar">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="22" y1="2" x2="11" y2="13"/>
@@ -160,30 +154,71 @@
   </main>
 </div>
 
-<!-- Toast Notification -->
+<!-- ════════════════════════════════════════════
+     MODAL: CRIAR GRUPO
+════════════════════════════════════════════ -->
+<div id="modal-grupo" class="modal-overlay">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+
+    <div class="modal-header">
+      <div class="modal-header-icon">👥</div>
+      <div>
+        <div class="modal-titulo" id="modal-titulo">Criar Grupo</div>
+        <div class="modal-subtitulo">Selecione os membros e dê um nome</div>
+      </div>
+      <button id="modal-fechar" class="modal-fechar" aria-label="Fechar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <label class="modal-label" for="modal-nome-grupo">Nome do grupo</label>
+      <input
+        id="modal-nome-grupo"
+        type="text"
+        class="modal-input"
+        placeholder="Ex: Projeto Alpha, Amigos..."
+        maxlength="40"
+        autocomplete="off"
+      />
+
+      <div class="modal-label" style="margin-top: 20px;">Adicionar membros</div>
+      <div id="modal-lista-membros" class="modal-lista-membros">
+        <!-- Renderizado via JS -->
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="modal-btn-cancelar" onclick="fecharModal()">Cancelar</button>
+      <button id="modal-confirmar" class="modal-btn-criar">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <line x1="19" y1="8" x2="19" y2="14"/>
+          <line x1="22" y1="11" x2="16" y2="11"/>
+        </svg>
+        Criar Grupo
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast -->
 <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
 
 <!-- ════════════════════════════════════════════
-     SCRIPTS — Ordem de dependências respeitada
+     SCRIPTS
 ════════════════════════════════════════════ -->
-<!-- Socket.IO client (servido pelo servidor) -->
 <script src="/socket.io/socket.io.js"></script>
-
-<!-- Interfaces -->
 <script src="js/interfaces/Observavel.js"></script>
 <script src="js/interfaces/EstrategiaEnvio.js"></script>
-
-<!-- Modelo -->
 <script src="js/models/Pacote.js"></script>
-
-<!-- Estratégias concretas (Padrão Strategy) -->
 <script src="js/strategies/EnvioPublico.js"></script>
 <script src="js/strategies/EnvioPrivado.js"></script>
-
-<!-- CelularUsuario (Padrão Observer + usa Strategy) -->
 <script src="js/core/CelularUsuario.js"></script>
-
-<!-- Controlador principal -->
 <script src="js/app.js"></script>
 
 </body>
