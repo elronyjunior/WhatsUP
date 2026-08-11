@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatApp — Observer + Strategy</title>
+  <meta name="description" content="Protótipo de chat implementando os padrões de projeto Observer e Strategy em tempo real com Node.js e Socket.IO." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════
+     LOGIN SCREEN
+════════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+
+    <div class="login-logo">
+      <div class="login-logo-icon">💬</div>
+      <h1>ChatApp</h1>
+    </div>
+    <p class="login-subtitle">Protótipo com Observer + Strategy</p>
+
+    <label class="login-label" for="input-nome">Seu nome de usuário</label>
+    <div class="login-input-wrap">
+      <input
+        id="input-nome"
+        class="login-input"
+        type="text"
+        placeholder="Digite seu nome..."
+        maxlength="30"
+        autocomplete="off"
+      />
+    </div>
+
+    <div id="login-error" class="login-error hidden">
+      ⚠️ Por favor, insira um nome válido.
+    </div>
+
+    <button id="btn-entrar" class="btn-primary">Entrar no Chat</button>
+
+    <div class="login-patterns">
+      <span class="pattern-badge observer">🔔 Observer</span>
+      <span class="pattern-badge strategy">⚡ Strategy</span>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     CHAT SCREEN
+════════════════════════════════════════════ -->
+<div id="chat-screen" class="hidden">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-brand">
+        <div class="brand-icon">💬</div>
+        <span class="brand-title">ChatApp</span>
+      </div>
+      <div class="meu-perfil">
+        <div class="perfil-avatar" id="avatar-inicial">?</div>
+        <div class="perfil-info">
+          <div class="perfil-nome" id="nome-usuario">Usuário</div>
+          <div class="perfil-status">Online</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section-title">
+      Usuários Online
+      <span class="usuarios-count-badge" id="usuarios-count">0</span>
+    </div>
+
+    <div class="lista-usuarios-scroll">
+      <div id="lista-usuarios"></div>
+    </div>
+
+    <!-- Painel de padrões -->
+    <div class="sidebar-patterns">
+      <div class="pattern-item">
+        <div class="pattern-dot observer"></div>
+        <span class="pattern-label">Padrão</span>
+        <span class="pattern-name observer">Observer</span>
+      </div>
+      <div class="pattern-item">
+        <div class="pattern-dot strategy"></div>
+        <span class="pattern-label">Padrão</span>
+        <span class="pattern-name strategy">Strategy</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- CHAT AREA -->
+  <main class="chat-area">
+
+    <!-- Chat Header -->
+    <header class="chat-header">
+      <div class="chat-header-left">
+        <div class="chat-channel-icon">🌐</div>
+        <div>
+          <div class="chat-channel-name">Canal Geral</div>
+          <div class="chat-channel-sub">ServidorCentral (Observer) — todos os usuários</div>
+        </div>
+      </div>
+      <span id="badge-estrategia" class="badge-estrategia publico">PÚBLICO</span>
+    </header>
+
+    <!-- Messages -->
+    <div id="messages-container" role="log" aria-live="polite" aria-label="Mensagens do chat">
+      <!-- Mensagens renderizadas via JS -->
+    </div>
+
+    <!-- Input Area -->
+    <div id="input-area">
+
+      <!-- Seletor de Destinatários (Privado) -->
+      <div id="seletor-destinatarios" class="hidden">
+        <div class="seletor-titulo">
+          🔒 Selecionar destinatários
+        </div>
+        <div id="checkboxes-destinatarios">
+          <!-- Checkboxes renderizados via JS -->
+        </div>
+      </div>
+
+      <div class="input-row">
+        <textarea
+          id="msg-input"
+          placeholder="Digite uma mensagem..."
+          rows="1"
+          aria-label="Campo de mensagem"
+        ></textarea>
+
+        <button
+          id="btn-toggle-estrategia"
+          class="btn-toggle-estrategia"
+          title="Alternar entre EnvioPublico e EnvioPrivado (Padrão Strategy)"
+          aria-label="Alternar estratégia de envio"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          Público
+        </button>
+
+        <button id="btn-enviar" class="btn-enviar" title="Enviar mensagem" aria-label="Enviar">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Toast Notification -->
+<div id="toast" class="toast" role="alert" aria-live="assertive"></div>
+
+<!-- ════════════════════════════════════════════
+     SCRIPTS — Ordem de dependências respeitada
+════════════════════════════════════════════ -->
+<!-- Socket.IO client (servido pelo servidor) -->
+<script src="/socket.io/socket.io.js"></script>
+
+<!-- Interfaces -->
+<script src="js/interfaces/Observavel.js"></script>
+<script src="js/interfaces/EstrategiaEnvio.js"></script>
+
+<!-- Modelo -->
+<script src="js/models/Pacote.js"></script>
+
+<!-- Estratégias concretas (Padrão Strategy) -->
+<script src="js/strategies/EnvioPublico.js"></script>
+<script src="js/strategies/EnvioPrivado.js"></script>
+
+<!-- CelularUsuario (Padrão Observer + usa Strategy) -->
+<script src="js/core/CelularUsuario.js"></script>
+
+<!-- Controlador principal -->
+<script src="js/app.js"></script>
+
+</body>
+</html>

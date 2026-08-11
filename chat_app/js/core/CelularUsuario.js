@@ -1,0 +1,73 @@
+/**
+ * CelularUsuario — Implementa Observavel (Padrão Observer)
+ *                  Usa EstrategiaEnvio    (Padrão Strategy)
+ *
+ * Representa o dispositivo/cliente do usuário no chat.
+ * Compõe uma estratégia de envio que pode ser trocada em tempo de execução,
+ * e notifica o ServidorCentral (Observador) via Socket.IO.
+ */
+class CelularUsuario extends Observavel {
+  /**
+   * @param {string} nome - Nome do usuário
+   * @param {import('socket.io-client').Socket} socket - Conexão com o ServidorCentral
+   */
+  constructor(nome, socket) {
+    super();
+    this.nome = nome;
+    this.socket = socket; // Referência ao Observador (ServidorCentral)
+
+    // Estratégia padrão: envio público
+    this._estrategiaPrivacidade = new EnvioPublico(nome);
+  }
+
+  /**
+   * mudarEstrategia() — troca a EstrategiaEnvio em tempo de execução
+   * Permite alternar entre EnvioPublico e EnvioPrivado dinamicamente.
+   *
+   * @param {EstrategiaEnvio} novaEstrategia
+   */
+  mudarEstrategia(novaEstrategia) {
+    this._estrategiaPrivacidade = novaEstrategia;
+    console.log(
+      `[CelularUsuario] Estratégia alterada para: ${novaEstrategia.constructor.name}`
+    );
+  }
+
+  /**
+   * escreverMensagem() — ponto de entrada para envio de mensagens
+   *
+   * 1. Delega para a estratégia atual o empacotamento da mensagem
+   * 2. Chama notificarServidor() para transmitir ao ServidorCentral
+   *
+   * @param {string} texto - Conteúdo da mensagem
+   * @param {string[]} destinatarios - Lista de destinatários (usado em EnvioPrivado)
+   */
+  escreverMensagem(texto, destinatarios = []) {
+    if (!texto || texto.trim() === '') return;
+
+    // Padrão Strategy: delega o empacotamento à estratégia ativa
+    const pacote = this._estrategiaPrivacidade.empacotarMensagem(texto.trim(), destinatarios);
+
+    // Padrão Observer: notifica o servidor com o pacote gerado
+    this.notificarServidor(pacote);
+  }
+
+  /**
+   * notificarServidor() — implementação de Observavel
+   * Envia o pacote ao ServidorCentral (Observador) via WebSocket.
+   *
+   * @param {Pacote} pacote
+   */
+  notificarServidor(pacote) {
+    console.log(
+      `[CelularUsuario] Notificando servidor — Tipo: ${pacote.tipo}`,
+      pacote.toJSON()
+    );
+    this.socket.emit('notificar_servidor', pacote.toJSON());
+  }
+
+  /** Retorna o nome da estratégia atual */
+  getEstrategiaAtual() {
+    return this._estrategiaPrivacidade.constructor.name;
+  }
+}
