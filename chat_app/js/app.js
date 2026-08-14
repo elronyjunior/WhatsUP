@@ -1,3 +1,6 @@
+/**
+ * app.js — Controlador principal da interface do chat
+
 from pathlib import Path
 
 code = r'''/**
