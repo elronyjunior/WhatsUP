@@ -63,5 +63,3 @@ class Pacote {
     };
   }
 }
-
-module.exports = Pacote;
