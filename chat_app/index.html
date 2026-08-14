@@ -11,7 +11,7 @@
 <body>
 
 <!-- ════════════════════════════════════════════
-     LOGIN SCREEN
+     LOGIN / REGISTRO SCREEN
 ════════════════════════════════════════════ -->
 <div id="login-screen">
   <div class="login-card">
@@ -21,27 +21,96 @@
     </div>
     <p class="login-subtitle">Protótipo com Observer + Strategy</p>
 
-    <label class="login-label" for="input-nome">Seu nome de usuário</label>
-    <div class="login-input-wrap">
-      <input
-        id="input-nome"
-        class="login-input"
-        type="text"
-        placeholder="Digite seu nome..."
-        maxlength="30"
-        autocomplete="off"
-      />
+    <!-- Abas Login / Registro -->
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="trocarAba('login')">Entrar</button>
+      <button class="auth-tab" id="tab-registro" onclick="trocarAba('registro')">Criar Conta</button>
     </div>
 
-    <div id="login-error" class="login-error hidden">
-      ⚠️ Por favor, insira um nome válido.
+    <!-- Formulário de Login -->
+    <div id="form-login" class="auth-form">
+      <label class="login-label" for="input-nome">Seu nome de usuário</label>
+      <div class="login-input-wrap">
+        <input
+          id="input-nome"
+          class="login-input"
+          type="text"
+          placeholder="Digite seu nome..."
+          maxlength="30"
+          autocomplete="off"
+        />
+      </div>
+
+      <label class="login-label" for="input-senha">Senha</label>
+      <div class="login-input-wrap">
+        <input
+          id="input-senha"
+          class="login-input"
+          type="password"
+          placeholder="Digite sua senha..."
+          maxlength="50"
+          autocomplete="current-password"
+        />
+      </div>
+
+      <div id="login-error" class="login-error hidden"></div>
+
+      <button id="btn-entrar" class="btn-primary">
+        <span class="btn-text">Entrar no Chat</span>
+        <span class="btn-loading hidden">⏳ Entrando...</span>
+      </button>
     </div>
 
-    <button id="btn-entrar" class="btn-primary">Entrar no Chat</button>
+    <!-- Formulário de Registro -->
+    <div id="form-registro" class="auth-form hidden">
+      <label class="login-label" for="input-reg-nome">Escolha um nome de usuário</label>
+      <div class="login-input-wrap">
+        <input
+          id="input-reg-nome"
+          class="login-input"
+          type="text"
+          placeholder="Mínimo 3 caracteres..."
+          maxlength="30"
+          autocomplete="off"
+        />
+      </div>
+
+      <label class="login-label" for="input-reg-senha">Crie uma senha</label>
+      <div class="login-input-wrap">
+        <input
+          id="input-reg-senha"
+          class="login-input"
+          type="password"
+          placeholder="Mínimo 4 caracteres..."
+          maxlength="50"
+          autocomplete="new-password"
+        />
+      </div>
+
+      <label class="login-label" for="input-reg-senha2">Confirme a senha</label>
+      <div class="login-input-wrap">
+        <input
+          id="input-reg-senha2"
+          class="login-input"
+          type="password"
+          placeholder="Repita a senha..."
+          maxlength="50"
+          autocomplete="new-password"
+        />
+      </div>
+
+      <div id="registro-error" class="login-error hidden"></div>
+
+      <button id="btn-registrar" class="btn-primary btn-registro">
+        <span class="btn-text">Criar Conta</span>
+        <span class="btn-loading hidden">⏳ Criando...</span>
+      </button>
+    </div>
 
     <div class="login-patterns">
       <span class="pattern-badge observer">🔔 Observer</span>
       <span class="pattern-badge strategy">⚡ Strategy</span>
+      <span class="pattern-badge cassandra-badge">🗄️ Cassandra</span>
     </div>
   </div>
 </div>

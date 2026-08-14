@@ -1239,3 +1239,78 @@ html, body {
   .chat-area { width: 100%; }
   .toast { left: 50%; }
 }
+
+
+/* ─── AUTH TABS ──────────────────────────────────────────────────── */
+.auth-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 24px;
+  background: var(--bg-surface2);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  border: 1px solid var(--border);
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.auth-tab.active {
+  background: linear-gradient(135deg, var(--color-primary), #5B21B6);
+  color: white;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+}
+
+.auth-tab:not(.active):hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.auth-form {
+  animation: fadeSlideIn 0.25s ease;
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.btn-primary .btn-loading {
+  font-size: 14px;
+}
+
+.btn-registro {
+  background: linear-gradient(135deg, var(--color-cyan), #0891B2);
+}
+
+.btn-registro:hover {
+  box-shadow: var(--shadow-glow-cyan);
+}
+
+.cassandra-badge {
+  border-color: rgba(16, 185, 129, 0.4);
+  color: var(--color-green);
+}
+
+/* Toast type: sucesso */
+.toast.sucesso {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.95), rgba(5, 150, 105, 0.95));
+  color: white;
+}

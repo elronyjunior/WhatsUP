@@ -20,6 +20,7 @@ let conversas     = new Map();         // Map<string, mensagem[]>
 let naoLidas      = new Map();         // Map<string, number>
 let grupos        = new Map();         // Map<grupoId, { id, nome, membros, criador }>
 let buscaQuery    = '';
+let historicoCarregado = new Set();    // Conversas cujo histórico já foi carregado
 
 conversas.set('geral', []);
 
@@ -28,27 +29,173 @@ document.addEventListener('DOMContentLoaded', () => {
   setupLoginScreen();
 });
 
+// ─── Abas Login / Registro ────────────────────────────────────────────────────
+function trocarAba(aba) {
+  const tabLogin    = document.getElementById('tab-login');
+  const tabRegistro = document.getElementById('tab-registro');
+  const formLogin   = document.getElementById('form-login');
+  const formRegistro = document.getElementById('form-registro');
+
+  // Limpa erros
+  document.getElementById('login-error').classList.add('hidden');
+  document.getElementById('registro-error').classList.add('hidden');
+
+  if (aba === 'login') {
+    tabLogin.classList.add('active');
+    tabRegistro.classList.remove('active');
+    formLogin.classList.remove('hidden');
+    formRegistro.classList.add('hidden');
+    document.getElementById('input-nome').focus();
+  } else {
+    tabRegistro.classList.add('active');
+    tabLogin.classList.remove('active');
+    formRegistro.classList.remove('hidden');
+    formLogin.classList.add('hidden');
+    document.getElementById('input-reg-nome').focus();
+  }
+}
+
 // ─── Login ────────────────────────────────────────────────────────────────────
 function setupLoginScreen() {
   const loginBtn   = document.getElementById('btn-entrar');
   const nomeInput  = document.getElementById('input-nome');
-  const loginError = document.getElementById('login-error');
+  const senhaInput = document.getElementById('input-senha');
+  const regBtn     = document.getElementById('btn-registrar');
 
   loginBtn.addEventListener('click', () => entrarNoChat());
   nomeInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') entrarNoChat();
-    loginError.classList.add('hidden');
+    if (e.key === 'Enter') senhaInput.focus();
+    document.getElementById('login-error').classList.add('hidden');
   });
+  senhaInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') entrarNoChat();
+    document.getElementById('login-error').classList.add('hidden');
+  });
+
+  regBtn.addEventListener('click', () => registrarConta());
+  document.getElementById('input-reg-nome').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('input-reg-senha').focus();
+    document.getElementById('registro-error').classList.add('hidden');
+  });
+  document.getElementById('input-reg-senha').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('input-reg-senha2').focus();
+    document.getElementById('registro-error').classList.add('hidden');
+  });
+  document.getElementById('input-reg-senha2').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') registrarConta();
+    document.getElementById('registro-error').classList.add('hidden');
+  });
+
   nomeInput.focus();
 }
 
-function entrarNoChat() {
+function mostrarErroLogin(mensagem) {
+  const el = document.getElementById('login-error');
+  el.textContent = '⚠️ ' + mensagem;
+  el.classList.remove('hidden');
+}
+
+function mostrarErroRegistro(mensagem) {
+  const el = document.getElementById('registro-error');
+  el.textContent = '⚠️ ' + mensagem;
+  el.classList.remove('hidden');
+}
+
+async function entrarNoChat() {
   const nome = document.getElementById('input-nome').value.trim();
-  if (!nome) {
-    document.getElementById('login-error').classList.remove('hidden');
+  const senha = document.getElementById('input-senha').value;
+
+  if (!nome || !senha) {
+    mostrarErroLogin('Preencha o nome e a senha.');
     return;
   }
-  conectar(nome);
+
+  const btn = document.getElementById('btn-entrar');
+  btn.querySelector('.btn-text').classList.add('hidden');
+  btn.querySelector('.btn-loading').classList.remove('hidden');
+  btn.disabled = true;
+
+  try {
+    const response = await fetch(`${SERVER_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: nome, senha }),
+    });
+
+    const data = await response.json();
+
+    if (!data.sucesso) {
+      mostrarErroLogin(data.erro || 'Erro ao fazer login.');
+      return;
+    }
+
+    // Login OK → conectar ao Socket.IO
+    conectar(nome);
+  } catch (err) {
+    mostrarErroLogin('Erro de conexão com o servidor.');
+  } finally {
+    btn.querySelector('.btn-text').classList.remove('hidden');
+    btn.querySelector('.btn-loading').classList.add('hidden');
+    btn.disabled = false;
+  }
+}
+
+async function registrarConta() {
+  const nome  = document.getElementById('input-reg-nome').value.trim();
+  const senha = document.getElementById('input-reg-senha').value;
+  const senha2 = document.getElementById('input-reg-senha2').value;
+
+  if (!nome || !senha || !senha2) {
+    mostrarErroRegistro('Preencha todos os campos.');
+    return;
+  }
+
+  if (senha !== senha2) {
+    mostrarErroRegistro('As senhas não coincidem.');
+    return;
+  }
+
+  if (nome.length < 3) {
+    mostrarErroRegistro('Nome deve ter pelo menos 3 caracteres.');
+    return;
+  }
+
+  if (senha.length < 4) {
+    mostrarErroRegistro('Senha deve ter pelo menos 4 caracteres.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-registrar');
+  btn.querySelector('.btn-text').classList.add('hidden');
+  btn.querySelector('.btn-loading').classList.remove('hidden');
+  btn.disabled = true;
+
+  try {
+    const response = await fetch(`${SERVER_URL}/api/auth/registrar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: nome, senha }),
+    });
+
+    const data = await response.json();
+
+    if (!data.sucesso) {
+      mostrarErroRegistro(data.erro || 'Erro ao criar conta.');
+      return;
+    }
+
+    // Registro OK → trocar para aba de login com mensagem de sucesso
+    mostrarToast('✅ Conta criada! Faça login para entrar.', 'sucesso');
+    trocarAba('login');
+    document.getElementById('input-nome').value = nome;
+    document.getElementById('input-senha').focus();
+  } catch (err) {
+    mostrarErroRegistro('Erro de conexão com o servidor.');
+  } finally {
+    btn.querySelector('.btn-text').classList.remove('hidden');
+    btn.querySelector('.btn-loading').classList.add('hidden');
+    btn.disabled = false;
+  }
 }
 
 // ─── Conexão Socket.IO ────────────────────────────────────────────────────────
@@ -115,9 +262,61 @@ function conectar(nome) {
     }
   });
 
+  // Histórico de mensagens carregado do Cassandra
+  socket.on('historico_carregado', ({ conversaId, mensagens }) => {
+    if (!mensagens || mensagens.length === 0) return;
+
+    // Mapeia conversaId do banco para a chave local da conversa
+    const chaveLocal = mapearConversaIdParaLocal(conversaId);
+    if (!conversas.has(chaveLocal)) conversas.set(chaveLocal, []);
+
+    const msgsAtuais = conversas.get(chaveLocal);
+    const idsExistentes = new Set(msgsAtuais.map((m) => m.id));
+
+    // Adiciona apenas mensagens que não existem ainda
+    const novas = mensagens.filter((m) => !idsExistentes.has(m.id));
+    if (novas.length > 0) {
+      conversas.set(chaveLocal, [...novas, ...msgsAtuais]);
+    }
+
+    if (conversaAtiva === chaveLocal) {
+      renderizarMensagensAtuais();
+    }
+    renderizarConversas();
+  });
+
   socket.on('sistema_mensagem', (dados) => {
     adicionarMensagemSistema(dados.texto, dados.tipo.toLowerCase());
   });
+}
+
+/**
+ * Mapeia o conversaId do banco para a chave usada localmente nas conversas.
+ * Ex: 'geral' → 'geral', 'priv_Alice_Bob' → 'Alice' ou 'Bob' (o outro), 'grupo_xxx' → 'grupo_xxx'
+ */
+function mapearConversaIdParaLocal(conversaId) {
+  if (conversaId === 'geral') return 'geral';
+  if (conversaId.startsWith('grupo_')) return conversaId;
+  if (conversaId.startsWith('priv_')) {
+    const meuNome = celularUsuario?.nome;
+    const partes = conversaId.replace('priv_', '').split('_');
+    // Retorna o nome do outro participante
+    return partes.find((p) => p !== meuNome) || partes[0];
+  }
+  return conversaId;
+}
+
+/**
+ * Gera o conversaId canônico para solicitar histórico ao servidor.
+ * Deve corresponder à lógica do MensagemRepository.gerarConversaId()
+ */
+function gerarConversaIdParaHistorico(chaveLocal) {
+  if (chaveLocal === 'geral') return 'geral';
+  if (chaveLocal.startsWith('grupo_')) return chaveLocal;
+  // Chat privado: ordena os nomes
+  const meuNome = celularUsuario?.nome;
+  const participantes = [meuNome, chaveLocal].sort();
+  return `priv_${participantes.join('_')}`;
 }
 
 // ─── Chat Screen ──────────────────────────────────────────────────────────────
@@ -132,6 +331,9 @@ function mostrarChat(nome) {
   renderizarConversas();
   setupChatEvents();
   setupModalGrupo();
+
+  // Carrega histórico do Canal Geral
+  carregarHistorico('geral');
 }
 
 function setupChatEvents() {
@@ -159,6 +361,16 @@ function setupChatEvents() {
   });
 
   msgInput.focus();
+}
+
+/**
+ * Solicita ao servidor o histórico de mensagens de uma conversa.
+ */
+function carregarHistorico(chaveLocal) {
+  const conversaId = gerarConversaIdParaHistorico(chaveLocal);
+  if (historicoCarregado.has(conversaId)) return;
+  historicoCarregado.add(conversaId);
+  socket.emit('carregar_historico', { conversaId, limite: 50 });
 }
 
 // ─── Envio de Mensagem ────────────────────────────────────────────────────────
@@ -203,6 +415,10 @@ function enviarMensagem() {
 function abrirConversa(id) {
   conversaAtiva = id;
   naoLidas.set(id, 0);
+
+  // Carrega histórico do Cassandra se ainda não foi carregado
+  carregarHistorico(id);
+
   renderizarConversas();
   renderizarMensagensAtuais();
   atualizarHeader(id);

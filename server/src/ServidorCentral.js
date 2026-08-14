@@ -9,17 +9,23 @@ const Pacote = require('./models/Pacote');
  *  - Rotear mensagens conforme o tipo do Pacote (PUBLICO, PRIVADO, GRUPO)
  *  - Manter lista de usuários conectados
  *  - Gerenciar grupos criados pelos usuários
+ *  - Persistir mensagens e grupos no Cassandra
  */
 class ServidorCentral extends Observador {
   /**
    * @param {import('socket.io').Server} io - Instância do Socket.IO Server
+   * @param {Object} repositorios - Repositórios de acesso ao banco
+   * @param {import('./repositories/MensagemRepository')} repositorios.mensagemRepo
+   * @param {import('./repositories/GrupoRepository')} repositorios.grupoRepo
    */
-  constructor(io) {
+  constructor(io, { mensagemRepo, grupoRepo }) {
     super();
     this.io = io;
+    this.mensagemRepo = mensagemRepo;
+    this.grupoRepo = grupoRepo;
     // Map<socketId, nome> — registro de usuários conectados
     this.usuariosConectados = new Map();
-    // Map<grupoId, { nome, membros: string[], criador: string }> — grupos
+    // Map<grupoId, { nome, membros: string[], criador: string }> — grupos em memória
     this.grupos = new Map();
     this._configurarEventos();
     console.log('✅ [ServidorCentral] Inicializado — aguardando conexões de CelularUsuario...');
@@ -31,13 +37,25 @@ class ServidorCentral extends Observador {
       console.log(`🔌 [ServidorCentral] Conexão estabelecida: ${socket.id}`);
 
       // Registro de usuário ao entrar no chat
-      socket.on('registrar_usuario', (nome) => {
+      socket.on('registrar_usuario', async (nome) => {
         this.usuariosConectados.set(socket.id, nome);
         console.log(`👤 [ServidorCentral] Usuário registrado: "${nome}" (${socket.id})`);
         this._transmitirListaUsuarios();
 
+        // Carrega grupos do usuário do banco
+        try {
+          const gruposDoBanco = await this.grupoRepo.buscarGruposDoUsuario(nome);
+          gruposDoBanco.forEach((g) => {
+            if (!this.grupos.has(g.id)) {
+              this.grupos.set(g.id, g);
+            }
+          });
+        } catch (err) {
+          console.error(`[ServidorCentral] Erro ao carregar grupos de "${nome}":`, err.message);
+        }
+
         // Envia lista de grupos existentes para o novo usuário
-        socket.emit('lista_grupos', this._serializarGrupos());
+        socket.emit('lista_grupos', this._serializarGrupos(nome));
 
         // Notifica demais usuários
         socket.broadcast.emit('sistema_mensagem', {
@@ -61,34 +79,55 @@ class ServidorCentral extends Observador {
       /**
        * Evento principal: CelularUsuario chama notificarServidor(pacote)
        */
-      socket.on('notificar_servidor', (dadosPacote) => {
+      socket.on('notificar_servidor', async (dadosPacote) => {
         const pacote = new Pacote(dadosPacote);
         console.log(
           `📦 [ServidorCentral] Pacote recebido de "${pacote.remetente}" — Tipo: ${pacote.tipo}`
         );
         this.receberNotificacao(pacote, socket);
+
+        // Persistir no Cassandra (usa o tipo real para conversaId)
+        try {
+          const tipoParaConversa = pacote.tipo === 'SECRETO' ? 'PUBLICO' : pacote.tipo;
+          const conversaId = this.mensagemRepo.gerarConversaId(
+            tipoParaConversa,
+            pacote.remetente,
+            pacote.destinatarios
+          );
+          await this.mensagemRepo.salvarMensagem(pacote.toJSON(), conversaId);
+        } catch (err) {
+          console.error('[ServidorCentral] Erro ao salvar mensagem:', err.message);
+        }
       });
 
       // Criar grupo
-      socket.on('criar_grupo', ({ nome, membros }) => {
+      socket.on('criar_grupo', async ({ nome, membros }) => {
         const remetente = this.usuariosConectados.get(socket.id);
         if (!remetente) return;
 
         const grupoId = `grupo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
         const todosMembros = [...new Set([remetente, ...membros])];
 
-        this.grupos.set(grupoId, {
+        const grupoInfo = {
           id: grupoId,
           nome,
           membros: todosMembros,
           criador: remetente,
           criadoEm: new Date().toISOString(),
-        });
+        };
+
+        this.grupos.set(grupoId, grupoInfo);
 
         console.log(`👥 [ServidorCentral] Grupo criado: "${nome}" — Membros: [${todosMembros.join(', ')}]`);
 
+        // Persistir no Cassandra
+        try {
+          await this.grupoRepo.criarGrupo(grupoInfo);
+        } catch (err) {
+          console.error('[ServidorCentral] Erro ao salvar grupo:', err.message);
+        }
+
         // Notifica todos os membros do novo grupo
-        const grupoInfo = this.grupos.get(grupoId);
         this.usuariosConectados.forEach((nomeMembro, socketId) => {
           if (todosMembros.includes(nomeMembro)) {
             this.io.to(socketId).emit('grupo_criado', grupoInfo);
@@ -97,25 +136,63 @@ class ServidorCentral extends Observador {
       });
 
       // Mensagem de grupo
-      socket.on('mensagem_grupo', (dadosPacote) => {
+      socket.on('mensagem_grupo', async (dadosPacote) => {
         const grupo = this.grupos.get(dadosPacote.grupoId);
         if (!grupo) return;
 
+        // Detecta @menções para mensagem secreta dentro do grupo
+        const mencoes = this._extrairMencoes(dadosPacote.texto);
+        const isSecreto = mencoes.length > 0;
+
         const pacote = {
           ...dadosPacote,
-          tipo: 'GRUPO',
+          tipo: isSecreto ? 'SECRETO' : 'GRUPO',
+          destinatarios: isSecreto ? mencoes : dadosPacote.destinatarios,
           timestamp: new Date().toISOString(),
           id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         };
 
-        console.log(`👥 [ServidorCentral] Mensagem de grupo "${grupo.nome}" de "${dadosPacote.remetente}"`);
+        if (isSecreto) {
+          console.log(`🔐 [ServidorCentral] Mensagem SECRETA no grupo "${grupo.nome}" → mencionados: [${mencoes.join(', ')}]`);
+          // Entrega só para mencionados + remetente (que sejam membros do grupo)
+          this.usuariosConectados.forEach((nome, socketId) => {
+            if (grupo.membros.includes(nome) && (mencoes.includes(nome) || nome === dadosPacote.remetente)) {
+              this.io.to(socketId).emit('mensagem_recebida', pacote);
+            }
+          });
+        } else {
+          console.log(`👥 [ServidorCentral] Mensagem de grupo "${grupo.nome}" de "${dadosPacote.remetente}"`);
+          // Entrega só para membros do grupo
+          this.usuariosConectados.forEach((nome, socketId) => {
+            if (grupo.membros.includes(nome)) {
+              this.io.to(socketId).emit('mensagem_recebida', pacote);
+            }
+          });
+        }
 
-        // Entrega só para membros do grupo
-        this.usuariosConectados.forEach((nome, socketId) => {
-          if (grupo.membros.includes(nome)) {
-            this.io.to(socketId).emit('mensagem_recebida', pacote);
-          }
-        });
+        // Persistir no Cassandra
+        try {
+          await this.mensagemRepo.salvarMensagem(pacote, dadosPacote.grupoId);
+        } catch (err) {
+          console.error('[ServidorCentral] Erro ao salvar mensagem de grupo:', err.message);
+        }
+      });
+
+      // Carregar histórico de uma conversa
+      socket.on('carregar_historico', async ({ conversaId, limite }) => {
+        try {
+          const nome = this.usuariosConectados.get(socket.id);
+          let mensagens = await this.mensagemRepo.buscarMensagens(conversaId, limite || 50);
+          // Filtra mensagens secretas: só mostra se o usuário é remetente ou mencionado
+          mensagens = mensagens.filter((m) => {
+            if (m.tipo !== 'SECRETO') return true;
+            return m.remetente === nome || (m.destinatarios && m.destinatarios.includes(nome));
+          });
+          socket.emit('historico_carregado', { conversaId, mensagens });
+        } catch (err) {
+          console.error(`[ServidorCentral] Erro ao carregar histórico de "${conversaId}":`, err.message);
+          socket.emit('historico_carregado', { conversaId, mensagens: [] });
+        }
       });
 
       // Desconexão
@@ -146,11 +223,32 @@ class ServidorCentral extends Observador {
    * Roteia o pacote conforme a estratégia aplicada pelo CelularUsuario
    * PUBLICO  → broadcast para todos
    * PRIVADO  → entrega somente para os destinatários
+   * Se a mensagem PUBLICA contém @menções → vira SECRETO (só mencionados veem)
    */
   _rotearMensagem(pacote, socketRemetente) {
+    // Detecta @menções em mensagens públicas
     if (pacote.tipo === 'PUBLICO') {
-      console.log(`📢 [ServidorCentral] Roteando PÚBLICO → broadcast global`);
-      this.io.emit('mensagem_recebida', pacote.toJSON());
+      const mencoes = this._extrairMencoes(pacote.texto);
+
+      if (mencoes.length > 0) {
+        // Mensagem secreta: só entrega para mencionados + remetente
+        const pacoteSecreto = { ...pacote.toJSON(), tipo: 'SECRETO', destinatarios: mencoes };
+        // Atualiza o pacote original para persistência correta
+        pacote.tipo = 'SECRETO';
+        pacote.destinatarios = mencoes;
+
+        console.log(`🔐 [ServidorCentral] Roteando SECRETO (Canal Geral) → mencionados: [${mencoes.join(', ')}]`);
+        socketRemetente.emit('mensagem_recebida', pacoteSecreto);
+        this.usuariosConectados.forEach((nome, socketId) => {
+          if (mencoes.includes(nome) && socketId !== socketRemetente.id) {
+            this.io.to(socketId).emit('mensagem_recebida', pacoteSecreto);
+          }
+        });
+      } else {
+        console.log(`📢 [ServidorCentral] Roteando PÚBLICO → broadcast global`);
+        this.io.emit('mensagem_recebida', pacote.toJSON());
+      }
+
     } else if (pacote.tipo === 'PRIVADO') {
       console.log(
         `🔒 [ServidorCentral] Roteando PRIVADO → destinatários: [${pacote.destinatarios.join(', ')}]`
@@ -164,6 +262,24 @@ class ServidorCentral extends Observador {
     }
   }
 
+  /**
+   * Extrai @menções do texto da mensagem.
+   * @param {string} texto
+   * @returns {string[]} Lista de nomes mencionados que existem como usuários conectados
+   */
+  _extrairMencoes(texto) {
+    const regex = /@(\w+)/g;
+    const mencoes = [];
+    const nomesConectados = new Set(this.usuariosConectados.values());
+    let match;
+    while ((match = regex.exec(texto)) !== null) {
+      if (nomesConectados.has(match[1])) {
+        mencoes.push(match[1]);
+      }
+    }
+    return [...new Set(mencoes)]; // remove duplicatas
+  }
+
   /** Emite a lista atualizada de usuários conectados para todos */
   _transmitirListaUsuarios() {
     const usuarios = Array.from(this.usuariosConectados.entries()).map(([socketId, nome]) => ({
@@ -173,9 +289,11 @@ class ServidorCentral extends Observador {
     this.io.emit('lista_usuarios', usuarios);
   }
 
-  /** Serializa grupos para envio ao cliente */
-  _serializarGrupos() {
-    return Array.from(this.grupos.values());
+  /** Serializa grupos para envio ao cliente — filtra apenas os do usuário */
+  _serializarGrupos(username) {
+    return Array.from(this.grupos.values()).filter(
+      (g) => g.membros.includes(username)
+    );
   }
 }
 
