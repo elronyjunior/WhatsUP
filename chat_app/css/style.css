@@ -60,9 +60,11 @@ html, body {
 /* ─── LOGIN SCREEN ───────────────────────────────────────────────── */
 #login-screen {
   height: 100vh;
+  height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
   background:
     radial-gradient(ellipse 80% 60% at 20% 40%, rgba(124,58,237,0.15) 0%, transparent 60%),
     radial-gradient(ellipse 60% 50% at 80% 70%, rgba(6,182,212,0.1) 0%, transparent 60%),
@@ -198,6 +200,7 @@ html, body {
 
 .login-patterns {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 24px;
   padding-top: 24px;
@@ -223,6 +226,7 @@ html, body {
 /* ─── CHAT SCREEN ────────────────────────────────────────────────── */
 #chat-screen {
   height: 100vh;
+  height: 100dvh;
   display: flex;
   overflow: hidden;
 }
@@ -594,7 +598,9 @@ html, body {
   min-height: 64px;
 }
 
-.chat-header-left { display: flex; align-items: center; gap: 13px; }
+.chat-header-left { display: flex; align-items: center; gap: 13px; flex: 1; min-width: 0; }
+
+.chat-header-texts { min-width: 0; overflow: hidden; }
 
 .chat-channel-icon {
   width: 40px;
@@ -622,8 +628,21 @@ html, body {
   font-weight: 700;
 }
 
-.chat-channel-name { font-size: 15px; font-weight: 700; }
-.chat-channel-sub  { font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
+.chat-channel-name {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-channel-sub  {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 #badge-estrategia {
   padding: 4px 12px;
@@ -632,6 +651,7 @@ html, body {
   font-weight: 700;
   letter-spacing: 0.06em;
   transition: var(--transition);
+  flex-shrink: 0;
 }
 
 .badge-estrategia.publico {
@@ -650,6 +670,27 @@ html, body {
   background: rgba(245,158,11,0.15);
   color: var(--color-yellow);
   border: 1px solid rgba(245,158,11,0.3);
+}
+
+/* ─── Botão Voltar (mobile) ──────────────────────────────────────── */
+.btn-voltar-mobile {
+  display: none;
+  width: 34px;
+  height: 34px;
+  background: var(--bg-surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.btn-voltar-mobile:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* ─── Botão Criar Grupo ──────────────────────────────────────────── */
@@ -1227,17 +1268,88 @@ html, body {
 .toast.erro  { background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.4); color: var(--color-red); }
 
 /* ─── Responsive ─────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  :root { --sidebar-width: 240px; }
-  .message-bubble { max-width: 82%; }
-  #messages-container { padding: 16px; }
+
+/* Tablets: sidebar um pouco mais estreita, mais espaço pro chat */
+@media (max-width: 1024px) and (min-width: 769px) {
+  :root { --sidebar-width: 260px; }
 }
 
-@media (max-width: 580px) {
-  :root { --sidebar-width: 0px; }
-  .sidebar { display: none; }
-  .chat-area { width: 100%; }
-  .toast { left: 50%; }
+/* Celulares e telas estreitas: alterna Lista ⇄ Chat, no estilo WhatsApp.
+   Nunca mostramos sidebar e chat-area ao mesmo tempo — evita o problema
+   de "sidebar sumiu e não tem como voltar pra lista de conversas". */
+@media (max-width: 768px) {
+  #chat-screen {
+    position: relative;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .chat-area { display: none; }
+
+  #chat-screen.conversa-aberta .sidebar { display: none; }
+  #chat-screen.conversa-aberta .chat-area { display: flex; }
+
+  .btn-voltar-mobile { display: flex; }
+
+  /* Header mais compacto pra caber botão de voltar + ícone + nome + badge */
+  .chat-header { padding: 10px 12px; gap: 8px; min-height: 56px; }
+  .chat-channel-icon { width: 36px; height: 36px; }
+  .chat-channel-name { font-size: 14px; }
+  .chat-channel-sub  { font-size: 11px; }
+  #badge-estrategia  { padding: 4px 9px; font-size: 10px; }
+
+  .sidebar-header { padding: 14px 12px 12px; }
+  .sidebar-search  { padding: 8px 10px; }
+
+  .message-bubble { max-width: 86%; }
+  .mensagem-secreta { max-width: 92%; }
+  #messages-container { padding: 14px 12px; }
+
+  #input-area { padding: 10px 10px 12px; }
+
+  /* Toast sempre centralizado na tela (não há mais sidebar+chat lado a lado) */
+  .toast { left: 50%; max-width: calc(100vw - 32px); }
+
+  /* Modal em tela cheia, como um bottom-sheet nativo */
+  .modal-card {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  /* Alvos de toque um pouco maiores */
+  .btn-novo-grupo { width: 36px; height: 36px; }
+  .modal-fechar   { width: 34px; height: 34px; }
+
+  /* Evita zoom automático do iOS ao focar campos (exige font-size >= 16px) */
+  .login-input,
+  .modal-input,
+  #msg-input,
+  #busca-conversa {
+    font-size: 16px;
+  }
+}
+
+/* Celulares pequenos (largura <= 380px) */
+@media (max-width: 380px) {
+  .login-card { padding: 32px 20px; }
+  .login-logo h1 { font-size: 19px; }
+  .chat-header { padding: 8px 10px; }
+  #header-sub { display: none; }
+}
+
+/* Landscape em celulares (pouca altura): header e input mais enxutos */
+@media (max-width: 900px) and (max-height: 440px) and (orientation: landscape) {
+  .chat-header { min-height: 44px; padding: 6px 12px; }
+  .chat-channel-icon { width: 30px; height: 30px; }
+  #input-area { padding: 6px 10px 8px; }
+  #msg-input { min-height: 36px; padding: 8px 14px; }
+  .btn-enviar { width: 36px; height: 36px; }
 }
 
 

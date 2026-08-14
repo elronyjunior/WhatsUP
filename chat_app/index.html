@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0D1117" />
   <title>ChatApp — Observer + Strategy</title>
   <meta name="description" content="Protótipo de chat implementando os padrões de projeto Observer e Strategy em tempo real com Node.js e Socket.IO." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>" />
@@ -190,8 +191,13 @@
     <!-- Header dinâmico -->
     <header class="chat-header" id="chat-header">
       <div class="chat-header-left">
+        <button id="btn-voltar-conversas" class="btn-voltar-mobile" title="Voltar para conversas" aria-label="Voltar para lista de conversas">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
         <div class="chat-channel-icon geral" id="header-icon">🌐</div>
-        <div>
+        <div class="chat-header-texts">
           <div class="chat-channel-name" id="header-nome">Canal Geral</div>
           <div class="chat-channel-sub" id="header-sub">ServidorCentral (Observer) — todos os usuários</div>
         </div>

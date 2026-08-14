@@ -340,8 +340,10 @@ function setupChatEvents() {
   const msgInput  = document.getElementById('msg-input');
   const btnEnviar = document.getElementById('btn-enviar');
   const buscaInput = document.getElementById('busca-conversa');
+  const btnVoltar = document.getElementById('btn-voltar-conversas');
 
   btnEnviar.addEventListener('click', enviarMensagem);
+  btnVoltar.addEventListener('click', voltarParaListaConversas);
 
   msgInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -422,7 +424,28 @@ function abrirConversa(id) {
   renderizarConversas();
   renderizarMensagensAtuais();
   atualizarHeader(id);
-  document.getElementById('msg-input').focus();
+
+  // Em telas de celular a lista de conversas e o chat ocupam a tela toda,
+  // alternando como no WhatsApp. Em telas largas essa classe não tem efeito.
+  document.getElementById('chat-screen').classList.add('conversa-aberta');
+
+  // Evita abrir o teclado virtual automaticamente no celular (empurraria o
+  // layout); em telas maiores o foco automático continua sendo útil.
+  if (!ehTelaMobile()) {
+    document.getElementById('msg-input').focus();
+  }
+}
+
+/**
+ * Volta da tela de chat para a lista de conversas (usado no botão "←" do
+ * cabeçalho, visível apenas em telas de celular).
+ */
+function voltarParaListaConversas() {
+  document.getElementById('chat-screen').classList.remove('conversa-aberta');
+}
+
+function ehTelaMobile() {
+  return window.matchMedia('(max-width: 768px)').matches;
 }
 
 function adicionarMensagemConversa(pacote) {
