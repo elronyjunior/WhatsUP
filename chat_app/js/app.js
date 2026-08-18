@@ -33,45 +33,68 @@ conversas.set('geral', []);
 /**
  * setupVisualViewport()
  *
- * O problema: quando o teclado virtual abre no celular, a maioria dos
- * browsers NÃO redimensiona o layout — o viewport lógico (100vh/dvh)
- * continua com o tamanho de tela cheia, e o #input-area some atrás
- * do teclado.
+ * Quando o teclado virtual abre no celular, o viewport lógico (100vh/dvh)
+ * NÃO é atualizado pela maioria dos browsers — o #input-area some atrás do teclado.
  *
- * A solução: a API window.visualViewport reporta a área visível REAL,
- * já descontando o teclado. Injetamos esse valor como --vvh no :root
- * e o CSS usa `height: var(--vvh)` no #chat-screen.
+ * Solução: usamos window.visualViewport que reporta a área visível REAL.
+ * Setamos style.height e style.top diretamente no #chat-screen para que ele
+ * ocupe exatamente a área visível, empurrando o #input-area para acima do teclado.
  *
- * Suporte: iOS Safari 13+, Android Chrome 61+, todos browsers modernos.
+ * A chain flex garante que a área de mensagens encolhe (graças ao min-height:0
+ * adicionado no CSS) e o input fica sempre no fundo.
+ *
+ * Compatibilidade: iOS Safari 13+, Android Chrome 61+, todos browsers modernos.
  */
 function setupVisualViewport() {
   const chatScreen = document.getElementById('chat-screen');
-  if (!window.visualViewport || !chatScreen) return;
+  if (!chatScreen) return;
 
-  const isMobile = () => window.innerWidth <= 768;
+  let ticking = false;
 
   function aplicarAltura() {
-    if (!isMobile()) {
-      // Desktop: remove a variável e deixa o CSS padrão agir
-      document.documentElement.style.removeProperty('--vvh');
-      chatScreen.style.removeProperty('top');
-      return;
-    }
+    if (ticking) return;
+    ticking = true;
 
-    const vv = window.visualViewport;
-    // --vvh = altura visível real (sem o teclado)
-    document.documentElement.style.setProperty('--vvh', vv.height + 'px');
+    requestAnimationFrame(() => {
+      ticking = false;
 
-    // offsetTop compensa casos onde o browser desloca a página inteira
-    // para cima ao invés de redimensionar (comportamento do Safari iOS)
-    chatScreen.style.top = vv.offsetTop + 'px';
+      const isMobile = window.innerWidth <= 768;
+      if (!isMobile) {
+        chatScreen.style.removeProperty('height');
+        chatScreen.style.removeProperty('top');
+        return;
+      }
+
+      if (window.visualViewport) {
+        const vv = window.visualViewport;
+        // Altura real da área visível (sem o teclado)
+        chatScreen.style.height = vv.height + 'px';
+        // offsetTop: iOS Safari às vezes move a viewport em vez de redimensionar
+        chatScreen.style.top = vv.offsetTop + 'px';
+      } else {
+        // Fallback para browsers sem visualViewport (muito antigos)
+        // No Android com interactive-widget=resizes-content, window.innerHeight atualiza
+        chatScreen.style.height = window.innerHeight + 'px';
+        chatScreen.style.top = '0px';
+      }
+    });
   }
 
-  window.visualViewport.addEventListener('resize', aplicarAltura);
-  window.visualViewport.addEventListener('scroll', aplicarAltura);
+  // --- Eventos da visualViewport API ---
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', aplicarAltura);
+    window.visualViewport.addEventListener('scroll', aplicarAltura);
+  }
+
+  // --- Fallback: resize da window (Android com interactive-widget) ---
   window.addEventListener('resize', aplicarAltura);
 
-  // Inicializa imediatamente
+  // --- Fallback: orientação mudou ---
+  window.addEventListener('orientationchange', () => {
+    setTimeout(aplicarAltura, 300); // aguarda a rotação completar
+  });
+
+  // Inicializa
   aplicarAltura();
 }
 
@@ -80,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupVisualViewport();
   setupLoginScreen();
 });
+
 
 // ─── Abas Login / Registro ────────────────────────────────────────────────────
 function trocarAba(aba) {
@@ -446,6 +470,14 @@ function setupChatEvents() {
   msgInput.addEventListener('input', () => {
     msgInput.style.height = 'auto';
     msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
+  });
+
+  // Fallback universal: garante que o input fique visível ao receber foco
+  // (útil para browsers que não disparam visualViewport resize corretamente)
+  msgInput.addEventListener('focus', () => {
+    setTimeout(() => {
+      msgInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 350); // aguarda o teclado terminar de abrir (~300ms)
   });
 
   buscaInput.addEventListener('input', () => {

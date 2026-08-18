@@ -580,6 +580,7 @@ html, body {
 /* ─── CHAT AREA ──────────────────────────────────────────────────── */
 .chat-area {
   flex: 1;
+  min-height: 0; /* CRÍTICO: sem isso, o flex não consegue encolher abaixo do conteúdo */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1078,6 +1079,7 @@ html, body {
 /* Messages Area */
 #messages-container {
   flex: 1;
+  min-height: 0; /* CRÍTICO: sem isso, o flex não consegue encolher quando o teclado abre */
   overflow-y: auto;
   padding: 20px 28px;
   display: flex;
@@ -1279,38 +1281,42 @@ html, body {
    de "sidebar sumiu e não tem como voltar pra lista de conversas". */
 @media (max-width: 768px) {
   /*
-   * TECLADO VIRTUAL — A altura real do viewport visível é controlada
-   * pelo JavaScript via visualViewport API (ver app.js: setupVisualViewport).
-   * O JS injeta a variável --vvh e o #chat-screen a usa como altura.
-   * Isso garante que o #input-area fique sempre acima do teclado em
-   * qualquer browser mobile (iOS Safari, Android Chrome, etc).
+   * TECLADO VIRTUAL NO MOBILE
+   * ──────────────────────────────────────────────────────────────────
+   * O JS (setupVisualViewport em app.js) seta diretamente:
+   *   chatScreen.style.height = visualViewport.height + 'px'
+   *   chatScreen.style.top    = visualViewport.offsetTop + 'px'
+   *
+   * A chain de flex garante que o #input-area sempre fica no fundo:
+   *   #chat-screen (fixed, altura = viewport visível)
+   *     └─ .chat-area (flex:1, min-height:0)
+   *           ├─ .chat-header  (flex-shrink:0)
+   *           ├─ #messages-container  (flex:1, min-height:0, overflow:auto)
+   *           └─ #input-area  (flex-shrink:0)
    */
   #chat-screen {
     position: fixed;
-    inset: 0 0 auto 0;
-    /* Fallback: sem JS o dvh já funciona em browsers modernos */
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: auto;
+    /* Altura inicial: fallback via dvh, sobrescrita pelo JS */
     height: 100dvh;
-    /* Sobrescrito pelo JS: --vvh = visualViewport.height */
-    height: var(--vvh, 100dvh);
   }
 
   .sidebar {
     width: 100%;
     min-width: 100%;
-    height: 100%;
   }
 
   .chat-area { display: none; }
 
   #chat-screen.conversa-aberta .sidebar { display: none; }
-  #chat-screen.conversa-aberta .chat-area {
-    display: flex;
-    height: 100%;
-  }
+  /* Não forçar height:100% aqui — flex:1 + min-height:0 já resolvem */
+  #chat-screen.conversa-aberta .chat-area { display: flex; }
 
   .btn-voltar-mobile { display: flex; }
 
-  /* Header mais compacto pra caber botão de voltar + ícone + nome + badge */
   .chat-header { padding: 10px 12px; gap: 8px; min-height: 56px; flex-shrink: 0; }
   .chat-channel-icon { width: 36px; height: 36px; }
   .chat-channel-name { font-size: 14px; }
@@ -1326,15 +1332,12 @@ html, body {
 
   #input-area {
     padding: 10px 10px 12px;
-    /* Respeita a safe-area do iPhone (notch / Dynamic Island) */
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     flex-shrink: 0;
   }
 
-  /* Toast sempre centralizado na tela (não há mais sidebar+chat lado a lado) */
   .toast { left: 50%; max-width: calc(100vw - 32px); }
 
-  /* Modal em tela cheia, como um bottom-sheet nativo */
   .modal-card {
     width: 100%;
     max-width: 100%;
@@ -1343,11 +1346,9 @@ html, body {
     border-radius: 0;
   }
 
-  /* Alvos de toque um pouco maiores */
   .btn-novo-grupo { width: 36px; height: 36px; }
   .modal-fechar   { width: 34px; height: 34px; }
 
-  /* Evita zoom automático do iOS ao focar campos (exige font-size >= 16px) */
   .login-input,
   .modal-input,
   #msg-input,
