@@ -8,13 +8,15 @@ class Pacote {
     texto,
     remetente,
     destinatarios = [],
-    tipo = 'PUBLICO'
+    tipo = 'PUBLICO',
+    modoExceto = false
   }) {
     this.id = uuidv4();
     this.texto = texto;
     this.remetente = remetente;
     this.destinatarios = destinatarios;
     this.tipo = tipo;
+    this.modoExceto = modoExceto; // Para mensagens SECRETO: indica "todos exceto"
     this.timestamp = new Date().toISOString();
   }
 

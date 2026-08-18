@@ -2,11 +2,16 @@
  * EnvioSecreto — Estratégia Concreta (Padrão Strategy)
  *
  * Empacota a mensagem como secreta com destinatários explícitos.
+ * Diferente do Privado, a mensagem secreta é uma CATEGORIA de envio:
+ *  - Pode ser enviada em qualquer contexto (geral, grupo, privado)
+ *  - Apenas os destinatários selecionados recebem
+ *  - A pessoa que "fica de fora" não recebe a mensagem (não está na lista de destinatários)
+ *
  * Suporta dois modos:
  *  - Inclusivo (modoExceto=false): só os destinatarios[] recebem
  *  - Exclusivo (modoExceto=true):  todos EXCETO os destinatarios[] recebem
  *
- * O ServidorCentral resolve a lista final via evento 'mensagem_secreta_custom'.
+ * O ServidorCentral entrega apenas para a lista final de receptores resolvida.
  */
 class EnvioSecreto extends EstrategiaEnvio {
   /**
@@ -27,14 +32,14 @@ class EnvioSecreto extends EstrategiaEnvio {
    */
   empacotarMensagem(texto, destinatarios = []) {
     if (destinatarios.length === 0 && !this.modoExceto) {
-      throw new Error('[EnvioSecreto] Selecione ao menos um destinatário para mensagem secreta.');
+      throw new Error('[EnvioSecreto] Selecione ao menos um destinatário para mensagem secreta inclusiva.');
     }
     return new Pacote({
       texto,
       remetente: this.remetente,
       destinatarios,
       tipo: 'SECRETO',
-      // modoExceto é enviado junto para o servidor resolver a lista final
+      // modoExceto é enviado junto para o servidor resolver a lista final (modo "todos exceto")
       modoExceto: this.modoExceto,
     });
   }

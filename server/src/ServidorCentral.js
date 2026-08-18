@@ -84,6 +84,18 @@ class ServidorCentral extends Observador {
         console.log(
           `📦 [ServidorCentral] Pacote recebido de "${pacote.remetente}" — Tipo: ${pacote.tipo}`
         );
+
+        // Se for SECRETO com modoExceto, resolve a lista final de receptores
+        if (pacote.tipo === 'SECRETO' && dadosPacote.modoExceto) {
+          const todosOnline = Array.from(this.usuariosConectados.values());
+          // Exclusivo: todos online exceto os selecionados (e exceto o próprio remetente)
+          const receptoresFinais = todosOnline.filter(
+            (nome) => !pacote.destinatarios.includes(nome) && nome !== pacote.remetente
+          );
+          pacote.destinatarios = receptoresFinais;
+          console.log(`🔐 [ServidorCentral] SECRETO (modo EXCETO) — receptores finais: [${receptoresFinais.join(', ')}]`);
+        }
+
         this.receberNotificacao(pacote, socket);
 
         // Persistir no Cassandra (usa o tipo real para conversaId)
@@ -280,6 +292,7 @@ class ServidorCentral extends Observador {
    * Roteia o pacote conforme a estratégia aplicada pelo CelularUsuario
    * PUBLICO  → broadcast para todos
    * PRIVADO  → entrega somente para os destinatários
+   * SECRETO  → entrega para destinatários selecionados (não para quem fica de fora), exceto se for privado
    * Se a mensagem PUBLICA contém @menções → vira SECRETO (só mencionados veem)
    */
   _rotearMensagem(pacote, socketRemetente) {
@@ -309,6 +322,19 @@ class ServidorCentral extends Observador {
     } else if (pacote.tipo === 'PRIVADO') {
       console.log(
         `🔒 [ServidorCentral] Roteando PRIVADO → destinatários: [${pacote.destinatarios.join(', ')}]`
+      );
+      socketRemetente.emit('mensagem_recebida', pacote.toJSON());
+      this.usuariosConectados.forEach((nome, socketId) => {
+        if (pacote.destinatarios.includes(nome) && socketId !== socketRemetente.id) {
+          this.io.to(socketId).emit('mensagem_recebida', pacote.toJSON());
+        }
+      });
+
+    } else if (pacote.tipo === 'SECRETO') {
+      // Mensagem secreta: entrega para os destinatários explicitamente selecionados + remetente
+      // A pessoa que "fica de fora" não recebe (está em destinatarios quem RECEBE, não quem NÃO recebe)
+      console.log(
+        `🔐 [ServidorCentral] Roteando SECRETO → receptores: [${pacote.destinatarios.join(', ')}]`
       );
       socketRemetente.emit('mensagem_recebida', pacote.toJSON());
       this.usuariosConectados.forEach((nome, socketId) => {
