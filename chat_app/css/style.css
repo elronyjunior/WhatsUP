@@ -40,6 +40,7 @@
 
 html, body {
   height: 100%;
+  height: 100dvh;
   font-family: 'Inter', -apple-system, sans-serif;
   background: var(--bg-base);
   color: var(--text-primary);
@@ -229,6 +230,8 @@ html, body {
   height: 100dvh;
   display: flex;
   overflow: hidden;
+  /* Garante que o layout reaja ao teclado virtual no mobile */
+  position: relative;
 }
 
 /* ─── SIDEBAR ────────────────────────────────────────────────────── */
@@ -1278,8 +1281,20 @@ html, body {
    Nunca mostramos sidebar e chat-area ao mesmo tempo — evita o problema
    de "sidebar sumiu e não tem como voltar pra lista de conversas". */
 @media (max-width: 768px) {
+  /*
+   * CORREÇÃO DO TECLADO VIRTUAL NO MOBILE
+   * ─────────────────────────────────────
+   * Quando o teclado abre no celular, o viewport visível encolhe.
+   * Usando position:fixed + 100dvh o #chat-screen sempre ocupa
+   * exatamente o espaço visível, empurrando o #input-area para cima
+   * do teclado automaticamente. O #messages-container com flex:1
+   * absorve o espaço restante e faz scroll internamente.
+   */
   #chat-screen {
-    position: relative;
+    position: fixed;
+    inset: 0;
+    height: 100%;
+    height: 100dvh;
   }
 
   .sidebar {
@@ -1287,7 +1302,13 @@ html, body {
     min-width: 100%;
   }
 
-  .chat-area { display: none; }
+  .chat-area {
+    display: none;
+    /* chat-area ocupa o espaço restante entre header e input */
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
 
   #chat-screen.conversa-aberta .sidebar { display: none; }
   #chat-screen.conversa-aberta .chat-area { display: flex; }
@@ -1295,7 +1316,7 @@ html, body {
   .btn-voltar-mobile { display: flex; }
 
   /* Header mais compacto pra caber botão de voltar + ícone + nome + badge */
-  .chat-header { padding: 10px 12px; gap: 8px; min-height: 56px; }
+  .chat-header { padding: 10px 12px; gap: 8px; min-height: 56px; flex-shrink: 0; }
   .chat-channel-icon { width: 36px; height: 36px; }
   .chat-channel-name { font-size: 14px; }
   .chat-channel-sub  { font-size: 11px; }
@@ -1308,7 +1329,12 @@ html, body {
   .mensagem-secreta { max-width: 92%; }
   #messages-container { padding: 14px 12px; }
 
-  #input-area { padding: 10px 10px 12px; }
+  /* Input fica fixo na base da área visível, acima do teclado */
+  #input-area {
+    padding: 10px 10px 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    flex-shrink: 0;
+  }
 
   /* Toast sempre centralizado na tela (não há mais sidebar+chat lado a lado) */
   .toast { left: 50%; max-width: calc(100vw - 32px); }
