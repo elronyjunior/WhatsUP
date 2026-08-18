@@ -9,6 +9,7 @@ const UsuarioRepository = require('./src/repositories/UsuarioRepository');
 const MensagemRepository = require('./src/repositories/MensagemRepository');
 const GrupoRepository = require('./src/repositories/GrupoRepository');
 const criarRotasAuth = require('./src/routes/auth');
+const criarRotasAdmin = require('./src/routes/admin');
 const ServidorCentral = require('./src/ServidorCentral');
 
 const app = express();
@@ -54,6 +55,9 @@ async function iniciar() {
 
     // Registra rotas de autenticação
     app.use('/api/auth', criarRotasAuth(usuarioRepo));
+
+    // Registra rotas admin (visualização do banco de dados)
+    app.use('/api/admin', criarRotasAdmin(cassandraClient));
 
     // Inicializa o ServidorCentral (Padrão Observer) com repositórios
     const servidorCentral = new ServidorCentral(io, { mensagemRepo, grupoRepo });
