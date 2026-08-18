@@ -40,7 +40,6 @@
 
 html, body {
   height: 100%;
-  height: 100dvh;
   font-family: 'Inter', -apple-system, sans-serif;
   background: var(--bg-base);
   color: var(--text-primary);
@@ -230,8 +229,6 @@ html, body {
   height: 100dvh;
   display: flex;
   overflow: hidden;
-  /* Garante que o layout reaja ao teclado virtual no mobile */
-  position: relative;
 }
 
 /* ─── SIDEBAR ────────────────────────────────────────────────────── */
@@ -1282,36 +1279,34 @@ html, body {
    de "sidebar sumiu e não tem como voltar pra lista de conversas". */
 @media (max-width: 768px) {
   /*
-   * CORREÇÃO DO TECLADO VIRTUAL NO MOBILE
-   * ─────────────────────────────────────
-   * Quando o teclado abre no celular, o viewport visível encolhe.
-   * Usando position:fixed + 100dvh o #chat-screen sempre ocupa
-   * exatamente o espaço visível, empurrando o #input-area para cima
-   * do teclado automaticamente. O #messages-container com flex:1
-   * absorve o espaço restante e faz scroll internamente.
+   * TECLADO VIRTUAL — A altura real do viewport visível é controlada
+   * pelo JavaScript via visualViewport API (ver app.js: setupVisualViewport).
+   * O JS injeta a variável --vvh e o #chat-screen a usa como altura.
+   * Isso garante que o #input-area fique sempre acima do teclado em
+   * qualquer browser mobile (iOS Safari, Android Chrome, etc).
    */
   #chat-screen {
     position: fixed;
-    inset: 0;
-    height: 100%;
+    inset: 0 0 auto 0;
+    /* Fallback: sem JS o dvh já funciona em browsers modernos */
     height: 100dvh;
+    /* Sobrescrito pelo JS: --vvh = visualViewport.height */
+    height: var(--vvh, 100dvh);
   }
 
   .sidebar {
     width: 100%;
     min-width: 100%;
+    height: 100%;
   }
 
-  .chat-area {
-    display: none;
-    /* chat-area ocupa o espaço restante entre header e input */
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-  }
+  .chat-area { display: none; }
 
   #chat-screen.conversa-aberta .sidebar { display: none; }
-  #chat-screen.conversa-aberta .chat-area { display: flex; }
+  #chat-screen.conversa-aberta .chat-area {
+    display: flex;
+    height: 100%;
+  }
 
   .btn-voltar-mobile { display: flex; }
 
@@ -1329,9 +1324,9 @@ html, body {
   .mensagem-secreta { max-width: 92%; }
   #messages-container { padding: 14px 12px; }
 
-  /* Input fica fixo na base da área visível, acima do teclado */
   #input-area {
     padding: 10px 10px 12px;
+    /* Respeita a safe-area do iPhone (notch / Dynamic Island) */
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     flex-shrink: 0;
   }

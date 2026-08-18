@@ -29,8 +29,55 @@ let modalGrupoConfigurado = false;
 
 conversas.set('geral', []);
 
-// ─── Inicialização ────────────────────────────────────────────────────────────
+// ─── Visual Viewport (teclado virtual mobile) ─────────────────────────────────
+/**
+ * setupVisualViewport()
+ *
+ * O problema: quando o teclado virtual abre no celular, a maioria dos
+ * browsers NÃO redimensiona o layout — o viewport lógico (100vh/dvh)
+ * continua com o tamanho de tela cheia, e o #input-area some atrás
+ * do teclado.
+ *
+ * A solução: a API window.visualViewport reporta a área visível REAL,
+ * já descontando o teclado. Injetamos esse valor como --vvh no :root
+ * e o CSS usa `height: var(--vvh)` no #chat-screen.
+ *
+ * Suporte: iOS Safari 13+, Android Chrome 61+, todos browsers modernos.
+ */
+function setupVisualViewport() {
+  const chatScreen = document.getElementById('chat-screen');
+  if (!window.visualViewport || !chatScreen) return;
+
+  const isMobile = () => window.innerWidth <= 768;
+
+  function aplicarAltura() {
+    if (!isMobile()) {
+      // Desktop: remove a variável e deixa o CSS padrão agir
+      document.documentElement.style.removeProperty('--vvh');
+      chatScreen.style.removeProperty('top');
+      return;
+    }
+
+    const vv = window.visualViewport;
+    // --vvh = altura visível real (sem o teclado)
+    document.documentElement.style.setProperty('--vvh', vv.height + 'px');
+
+    // offsetTop compensa casos onde o browser desloca a página inteira
+    // para cima ao invés de redimensionar (comportamento do Safari iOS)
+    chatScreen.style.top = vv.offsetTop + 'px';
+  }
+
+  window.visualViewport.addEventListener('resize', aplicarAltura);
+  window.visualViewport.addEventListener('scroll', aplicarAltura);
+  window.addEventListener('resize', aplicarAltura);
+
+  // Inicializa imediatamente
+  aplicarAltura();
+}
+
+// Roda assim que o DOM estiver pronto (antes mesmo do login)
 document.addEventListener('DOMContentLoaded', () => {
+  setupVisualViewport();
   setupLoginScreen();
 });
 
