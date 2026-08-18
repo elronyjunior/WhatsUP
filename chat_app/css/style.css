@@ -1444,15 +1444,12 @@ html, body {
   50%       { box-shadow: 0 0 22px rgba(124,58,237,0.55); }
 }
 
-/* O chat-area precisa de position:relative para o painel ficar no lugar certo */
-.chat-area { position: relative; }
-
-
 /* ─── INPUT AREA ─────────────────────────────────────────────────── */
 #input-area {
   padding: 12px 20px 16px;
   border-top: 1px solid var(--border);
   background: var(--bg-surface);
+  position: relative; /* necessário para o painel secreto (position:absolute) se posicionar corretamente */
 }
 
 .input-row {
