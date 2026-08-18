@@ -17,17 +17,21 @@ class EnvioPrivado extends EstrategiaEnvio {
    * Empacota a mensagem com tipo PRIVADO e lista de destinatários restrita.
    * @param {string} texto
    * @param {string[]} destinatarios - Nomes dos usuários que podem ver a mensagem
+   * @param {string} contextoOrigem - Contexto original (para mensagens privadas é o nome do destinatário)
    * @returns {Pacote}
    */
-  empacotarMensagem(texto, destinatarios = []) {
+  empacotarMensagem(texto, destinatarios = [], contextoOrigem = '') {
     if (destinatarios.length === 0) {
       throw new Error('[EnvioPrivado] Selecione ao menos um destinatário para mensagem privada.');
     }
+    // Para privado, o contextoOrigem é o nome do destinatário (primeiro na lista)
+    const contexto = contextoOrigem || (destinatarios.length > 0 ? destinatarios[0] : '');
     return new Pacote({
       texto,
       remetente: this.remetente,
       destinatarios,
       tipo: 'PRIVADO',
+      contextoOrigem: contexto,
     });
   }
 }

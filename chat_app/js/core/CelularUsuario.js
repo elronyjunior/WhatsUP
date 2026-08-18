@@ -41,12 +41,17 @@ class CelularUsuario extends Observavel {
    *
    * @param {string} texto - Conteúdo da mensagem
    * @param {string[]} destinatarios - Lista de destinatários (usado em EnvioPrivado)
+   * @param {string} contextoOrigem - Onde a mensagem está sendo enviada ('geral', 'grupo_xxx', ou nome do usuário)
    */
-  escreverMensagem(texto, destinatarios = []) {
+  escreverMensagem(texto, destinatarios = [], contextoOrigem = 'geral') {
     if (!texto || texto.trim() === '') return;
 
     // Padrão Strategy: delega o empacotamento à estratégia ativa
-    const pacote = this._estrategiaPrivacidade.empacotarMensagem(texto.trim(), destinatarios);
+    const pacote = this._estrategiaPrivacidade.empacotarMensagem(
+      texto.trim(),
+      destinatarios,
+      contextoOrigem
+    );
 
     // Padrão Observer: notifica o servidor com o pacote gerado
     this.notificarServidor(pacote);

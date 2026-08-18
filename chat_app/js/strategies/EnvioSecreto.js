@@ -28,9 +28,10 @@ class EnvioSecreto extends EstrategiaEnvio {
    * Empacota a mensagem com tipo SECRETO e os metadados de roteamento.
    * @param {string} texto
    * @param {string[]} destinatarios - Nomes selecionados no painel
+   * @param {string} contextoOrigem - Onde a mensagem está sendo enviada ('geral' ou 'grupo_xxx')
    * @returns {Pacote}
    */
-  empacotarMensagem(texto, destinatarios = []) {
+  empacotarMensagem(texto, destinatarios = [], contextoOrigem = 'geral') {
     if (destinatarios.length === 0 && !this.modoExceto) {
       throw new Error('[EnvioSecreto] Selecione ao menos um destinatário para mensagem secreta inclusiva.');
     }
@@ -41,6 +42,7 @@ class EnvioSecreto extends EstrategiaEnvio {
       tipo: 'SECRETO',
       // modoExceto é enviado junto para o servidor resolver a lista final (modo "todos exceto")
       modoExceto: this.modoExceto,
+      contextoOrigem,
     });
   }
 }

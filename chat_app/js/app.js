@@ -683,6 +683,7 @@ function enviarMensagem() {
       destinatarios,
       modoExceto: modoExcetoAtivo,
       conversaId,
+      contextoOrigem: conversaAtiva,
     });
 
     input.value = '';
@@ -706,7 +707,7 @@ function enviarMensagem() {
         new EnvioPublico(celularUsuario.nome)
       );
 
-      celularUsuario.escreverMensagem(texto, []);
+      celularUsuario.escreverMensagem(texto, [], 'geral');
     } else if (grupos.has(conversaAtiva)) {
       socket.emit('mensagem_grupo', {
         grupoId: conversaAtiva,
@@ -714,6 +715,7 @@ function enviarMensagem() {
         remetente: celularUsuario.nome,
         destinatarios: grupos.get(conversaAtiva).membros,
         tipo: 'GRUPO',
+        contextoOrigem: conversaAtiva,
         timestamp: new Date().toISOString(),
         id: `msg_${Date.now()}`,
       });
@@ -722,7 +724,7 @@ function enviarMensagem() {
         new EnvioPrivado(celularUsuario.nome)
       );
 
-      celularUsuario.escreverMensagem(texto, [conversaAtiva]);
+      celularUsuario.escreverMensagem(texto, [conversaAtiva], conversaAtiva);
     }
 
     input.value = '';
@@ -763,15 +765,21 @@ function adicionarMensagemConversa(pacote) {
   const meuNome = celularUsuario?.nome;
   let chave;
 
-  if (pacote.tipo === 'PUBLICO') {
-    chave = 'geral';
-  } else if (pacote.tipo === 'GRUPO') {
-    chave = pacote.grupoId;
+  // Primeiro tenta usar contextoOrigem (indica onde a mensagem foi enviada)
+  if (pacote.contextoOrigem) {
+    chave = pacote.contextoOrigem;
   } else {
-    chave =
-      pacote.remetente === meuNome
-        ? pacote.destinatarios[0]
-        : pacote.remetente;
+    // Fallback para compatibilidade com mensagens antigas
+    if (pacote.tipo === 'PUBLICO') {
+      chave = 'geral';
+    } else if (pacote.tipo === 'GRUPO') {
+      chave = pacote.grupoId;
+    } else {
+      chave =
+        pacote.remetente === meuNome
+          ? pacote.destinatarios[0]
+          : pacote.remetente;
+    }
   }
 
   if (!conversas.has(chave)) {

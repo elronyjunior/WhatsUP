@@ -120,7 +120,7 @@ class ServidorCentral extends Observador {
        * O remetente sempre recebe (para ver no próprio histórico).
        */
       socket.on('mensagem_secreta_custom', async (dados) => {
-        const { texto, remetente, destinatarios = [], modoExceto = false, conversaId } = dados;
+        const { texto, remetente, destinatarios = [], modoExceto = false, conversaId, contextoOrigem = 'geral' } = dados;
         const todosOnline = Array.from(this.usuariosConectados.values());
 
         // Resolve lista final de quem recebe (excluindo sempre o remetente — ele já recebe separado)
@@ -142,11 +142,12 @@ class ServidorCentral extends Observador {
           destinatarios: receptores,
           tipo: 'SECRETO',
           modoExceto,
+          contextoOrigem,
           timestamp: new Date().toISOString(),
         };
 
         console.log(
-          `🔐 [ServidorCentral] Mensagem SECRETA CUSTOM de "${remetente}" — modo: ${modoExceto ? 'EXCETO' : 'INCLUSIVO'} — receptores: [${receptores.join(', ')}]`
+          `🔐 [ServidorCentral] Mensagem SECRETA CUSTOM de "${remetente}" — modo: ${modoExceto ? 'EXCETO' : 'INCLUSIVO'} — receptores: [${receptores.join(', ')}] — contexto: ${contextoOrigem}`
         );
 
         // Envia para o remetente (sempre vê a própria mensagem)
