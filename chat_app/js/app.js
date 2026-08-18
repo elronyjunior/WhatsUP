@@ -22,6 +22,11 @@ let grupos = new Map();
 let buscaQuery = '';
 let historicoCarregado = new Set();
 
+// Estado do painel de mensagem secreta
+let painelSegretoAberto = false;
+let usuariosSelecionadosSecreto = new Set();
+let modoExcetoAtivo = false;
+
 // Impede que eventos da interface sejam registrados novamente em reconexões.
 let interfaceInicializada = false;
 let chatEventsConfigurados = false;
@@ -338,6 +343,11 @@ function conectar(nome) {
 
     renderizarConversas();
     atualizarListaMembrosCriarGrupo();
+
+    // Atualiza painel secreto em tempo real se estiver aberto
+    if (painelSegretoAberto) {
+      renderizarListaPainelSecreto();
+    }
   });
 
   socket.on('lista_grupos', (listaGrupos) => {
@@ -485,7 +495,150 @@ function setupChatEvents() {
     renderizarConversas();
   });
 
+  setupPainelSecreto();
+
   msgInput.focus();
+}
+
+// ─── Painel de Mensagem Secreta ───────────────────────────────────────────────
+function setupPainelSecreto() {
+  const btnSecreto     = document.getElementById('btn-mensagem-secreta');
+  const painel         = document.getElementById('painel-secreto');
+  const btnFechar      = document.getElementById('btn-fechar-painel');
+  const btnExceto      = document.getElementById('btn-exceto');
+  const contador       = document.getElementById('painel-contador');
+  const dica           = document.getElementById('painel-dica');
+
+  if (!btnSecreto || !painel) return;
+
+  // Abre/fecha o painel
+  btnSecreto.addEventListener('click', () => {
+    if (painelSegretoAberto) {
+      fecharPainelSecreto();
+    } else {
+      abrirPainelSecreto();
+    }
+  });
+
+  btnFechar.addEventListener('click', fecharPainelSecreto);
+
+  // Toggle EXCETO
+  btnExceto.addEventListener('click', () => {
+    modoExcetoAtivo = !modoExcetoAtivo;
+    btnExceto.classList.toggle('ativo', modoExcetoAtivo);
+    atualizarDicaSecreto();
+  });
+}
+
+function abrirPainelSecreto() {
+  const painel    = document.getElementById('painel-secreto');
+  const btnSecreto = document.getElementById('btn-mensagem-secreta');
+  if (!painel) return;
+
+  painelSegretoAberto = true;
+  painel.classList.add('aberto');
+  painel.setAttribute('aria-hidden', 'false');
+  btnSecreto.classList.add('ativo');
+
+  // Atualiza o placeholder do textarea
+  const msgInput = document.getElementById('msg-input');
+  if (msgInput) msgInput.placeholder = '🔐 Digite a mensagem secreta...';
+
+  renderizarListaPainelSecreto();
+}
+
+function fecharPainelSecreto() {
+  const painel     = document.getElementById('painel-secreto');
+  const btnSecreto = document.getElementById('btn-mensagem-secreta');
+  if (!painel) return;
+
+  painelSegretoAberto = false;
+  painel.classList.remove('aberto');
+  painel.setAttribute('aria-hidden', 'true');
+  btnSecreto.classList.remove('ativo');
+
+  // Restaura placeholder original
+  const msgInput = document.getElementById('msg-input');
+  if (msgInput) msgInput.placeholder = 'Digite uma mensagem...';
+}
+
+function renderizarListaPainelSecreto() {
+  const lista   = document.getElementById('painel-lista-usuarios');
+  const meuNome = celularUsuario?.nome;
+  if (!lista) return;
+
+  // Filtra usuários online excluindo o próprio usuário
+  const outrosUsuarios = usuariosOnline.filter((u) => u.nome !== meuNome);
+
+  if (outrosUsuarios.length === 0) {
+    lista.innerHTML = '<div class="painel-sem-usuarios">Nenhum outro usuário online 😶</div>';
+    return;
+  }
+
+  lista.innerHTML = '';
+  outrosUsuarios.forEach((u) => {
+    const selecionado = usuariosSelecionadosSecreto.has(u.nome);
+    const item = document.createElement('div');
+    item.className = 'painel-usuario-item' + (selecionado ? ' selecionado' : '');
+    item.dataset.nome = u.nome;
+    item.innerHTML = `
+      <div class="painel-usuario-check">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="painel-usuario-avatar">${u.nome.charAt(0).toUpperCase()}</div>
+      <div class="painel-usuario-nome">${u.nome}</div>
+      <span class="painel-usuario-status">● online</span>
+    `;
+    item.addEventListener('click', () => toggleUsuarioSecreto(u.nome));
+    lista.appendChild(item);
+  });
+
+  atualizarContadorSecreto();
+}
+
+function toggleUsuarioSecreto(nome) {
+  if (usuariosSelecionadosSecreto.has(nome)) {
+    usuariosSelecionadosSecreto.delete(nome);
+  } else {
+    usuariosSelecionadosSecreto.add(nome);
+  }
+
+  // Atualiza visual do item
+  const item = document.querySelector(`.painel-usuario-item[data-nome="${nome}"]`);
+  if (item) item.classList.toggle('selecionado', usuariosSelecionadosSecreto.has(nome));
+
+  atualizarContadorSecreto();
+}
+
+function atualizarContadorSecreto() {
+  const contador = document.getElementById('painel-contador');
+  if (!contador) return;
+  const n = usuariosSelecionadosSecreto.size;
+  if (n === 0) {
+    contador.textContent = 'Nenhum selecionado';
+    contador.classList.remove('tem-selecao');
+  } else {
+    contador.textContent = `${n} selecionado${n > 1 ? 's' : ''}`;
+    contador.classList.add('tem-selecao');
+  }
+  atualizarDicaSecreto();
+}
+
+function atualizarDicaSecreto() {
+  const dica = document.getElementById('painel-dica');
+  if (!dica) return;
+  const n = usuariosSelecionadosSecreto.size;
+  if (modoExcetoAtivo) {
+    dica.textContent = n === 0
+      ? 'Todos receberão (nenhum excluído)'
+      : `Todos receberão, exceto ${n} pessoa${n > 1 ? 's' : ''}`;
+  } else {
+    dica.textContent = n === 0
+      ? 'Selecione quem vai receber'
+      : `Só ${n} pessoa${n > 1 ? 's' : ''} receberá${n > 1 ? 'ão' : ''}`;
+  }
 }
 
 /**
@@ -512,6 +665,41 @@ function enviarMensagem() {
 
   if (!texto || !celularUsuario) return;
 
+  // ── Modo Mensagem Secreta (painel aberto) ─────────────────────────
+  if (painelSegretoAberto) {
+    const destinatarios = Array.from(usuariosSelecionadosSecreto);
+
+    // Validação: sem EXCETO, precisa de ao menos 1 selecionado
+    if (!modoExcetoAtivo && destinatarios.length === 0) {
+      mostrarToast('🔐 Selecione ao menos um destinatário', 'aviso');
+      return;
+    }
+
+    const conversaId = gerarConversaIdParaHistorico(conversaAtiva);
+
+    socket.emit('mensagem_secreta_custom', {
+      texto,
+      remetente: celularUsuario.nome,
+      destinatarios,
+      modoExceto: modoExcetoAtivo,
+      conversaId,
+    });
+
+    input.value = '';
+    input.style.height = 'auto';
+
+    // Fecha painel e zera seleção
+    fecharPainelSecreto();
+    usuariosSelecionadosSecreto.clear();
+    modoExcetoAtivo = false;
+    const btnExceto = document.getElementById('btn-exceto');
+    if (btnExceto) btnExceto.classList.remove('ativo');
+
+    input.focus();
+    return;
+  }
+
+  // ── Envio normal ──────────────────────────────────────────────────
   try {
     if (conversaAtiva === 'geral') {
       celularUsuario.mudarEstrategia(

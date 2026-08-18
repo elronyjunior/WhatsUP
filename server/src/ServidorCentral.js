@@ -100,6 +100,63 @@ class ServidorCentral extends Observador {
         }
       });
 
+      /**
+       * Mensagem Secreta Custom — Painel de seleção de destinatários
+       * Recebe: { texto, remetente, destinatarios[], modoExceto, conversaId }
+       *  - modoExceto=false → só os selecionados recebem (inclusivo)
+       *  - modoExceto=true  → todos EXCETO os selecionados recebem (exclusivo)
+       * O remetente sempre recebe (para ver no próprio histórico).
+       */
+      socket.on('mensagem_secreta_custom', async (dados) => {
+        const { texto, remetente, destinatarios = [], modoExceto = false, conversaId } = dados;
+        const todosOnline = Array.from(this.usuariosConectados.values());
+
+        // Resolve lista final de quem recebe (excluindo sempre o remetente — ele já recebe separado)
+        let receptores;
+        if (modoExceto) {
+          // Exclusivo: todos online exceto os selecionados (e exceto o próprio remetente)
+          receptores = todosOnline.filter(
+            (nome) => !destinatarios.includes(nome) && nome !== remetente
+          );
+        } else {
+          // Inclusivo: só os selecionados (excluindo o remetente da lista — ele recebe separado)
+          receptores = destinatarios.filter((nome) => nome !== remetente);
+        }
+
+        const pacote = {
+          id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          texto,
+          remetente,
+          destinatarios: receptores,
+          tipo: 'SECRETO',
+          modoExceto,
+          timestamp: new Date().toISOString(),
+        };
+
+        console.log(
+          `🔐 [ServidorCentral] Mensagem SECRETA CUSTOM de "${remetente}" — modo: ${modoExceto ? 'EXCETO' : 'INCLUSIVO'} — receptores: [${receptores.join(', ')}]`
+        );
+
+        // Envia para o remetente (sempre vê a própria mensagem)
+        socket.emit('mensagem_recebida', pacote);
+
+        // Envia para os receptores resolvidos
+        this.usuariosConectados.forEach((nome, socketId) => {
+          if (receptores.includes(nome)) {
+            this.io.to(socketId).emit('mensagem_recebida', pacote);
+          }
+        });
+
+        // Persistir no Cassandra
+        try {
+          const idConversa = conversaId || 'geral';
+          await this.mensagemRepo.salvarMensagem(pacote, idConversa);
+        } catch (err) {
+          console.error('[ServidorCentral] Erro ao salvar mensagem secreta custom:', err.message);
+        }
+      });
+
+
       // Criar grupo
       socket.on('criar_grupo', async ({ nome, membros }) => {
         const remetente = this.usuariosConectados.get(socket.id);
