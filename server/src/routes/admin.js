@@ -17,8 +17,8 @@ function criarRotasAdmin(cassandraClient) {
       const client = cassandraClient.getClient();
       const database = {};
 
-      // Tabelas conhecidas do projeto
-      const tabelas = ['usuarios', 'mensagens', 'grupos', 'grupo_membros'];
+      // Tabelas conhecidas do projeto (NOMES CORRETOS)
+      const tabelas = ['usuarios', 'mensagens_por_conversa', 'grupos', 'grupos_por_membro'];
 
       for (const tabela of tabelas) {
         try {
@@ -77,11 +77,22 @@ function criarRotasAdmin(cassandraClient) {
       }
 
       const client = cassandraClient.getClient();
-      const resultado = await client.execute(
-        `SELECT * FROM ${tabela} LIMIT ?`,
-        [parseInt(limite, 10)],
-        { prepare: true }
-      );
+      
+      // Para tabelas com clustering key, precisamos montar a query dinamicamente
+      let resultado;
+      if (tabela === 'mensagens_por_conversa') {
+        resultado = await client.execute(
+          `SELECT * FROM ${tabela} LIMIT ?`,
+          [parseInt(limite, 10)],
+          { prepare: true }
+        );
+      } else {
+        resultado = await client.execute(
+          `SELECT * FROM ${tabela} LIMIT ?`,
+          [parseInt(limite, 10)],
+          { prepare: true }
+        );
+      }
 
       const colunas = resultado.columns.map(col => ({
         nome: col.name,

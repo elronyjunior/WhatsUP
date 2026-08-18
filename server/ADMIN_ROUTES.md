@@ -129,13 +129,13 @@ curl http://localhost:3000/api/admin/database
 curl http://localhost:3000/api/admin/database/usuarios
 
 # Ver últimas 20 mensagens
-curl "http://localhost:3000/api/admin/database/mensagens?limite=20"
+curl "http://localhost:3000/api/admin/database/mensagens_por_conversa?limite=20"
 
 # Ver schema de grupos
 curl http://localhost:3000/api/admin/database/grupos/schema
 
 # Contar mensagens
-curl http://localhost:3000/api/admin/database/mensagens/count
+curl http://localhost:3000/api/admin/database/mensagens_por_conversa/count
 ```
 
 ### Com PowerShell
@@ -148,7 +148,7 @@ Invoke-RestMethod -Uri "http://localhost:3000/api/admin/database" | ConvertTo-Js
 Invoke-RestMethod -Uri "http://localhost:3000/api/admin/database/usuarios"
 
 # Ver últimas 50 mensagens
-Invoke-RestMethod -Uri "http://localhost:3000/api/admin/database/mensagens?limite=50"
+Invoke-RestMethod -Uri "http://localhost:3000/api/admin/database/mensagens_por_conversa?limite=50"
 ```
 
 ### Com Node.js/Fetch
@@ -171,9 +171,9 @@ console.log(usuarios.linhas);
 | Tabela | Descrição |
 |--------|-----------|
 | `usuarios` | Usuários registrados no sistema |
-| `mensagens` | Todas as mensagens (geral, privado, grupo) |
+| `mensagens_por_conversa` | Todas as mensagens (geral, privado, grupo) |
 | `grupos` | Grupos de chat criados |
-| `grupo_membros` | Membros de cada grupo |
+| `grupos_por_membro` | Índice de grupos por membro |
 
 ---
 
