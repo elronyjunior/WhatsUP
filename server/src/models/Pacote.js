@@ -42,7 +42,8 @@ class Pacote {
     texto,
     remetente,
     destinatarios = [],
-    tipo = 'PUBLICO'
+    tipo = 'PUBLICO',
+    status = 'ENVIADA'
   }) {
     this.id = gerarUUID();
     this.texto = texto;
@@ -50,6 +51,9 @@ class Pacote {
     this.destinatarios = destinatarios;
     this.tipo = tipo;
     this.timestamp = new Date().toISOString();
+    // Padrão State (EstadoMensagem) — só é relevante para mensagens PRIVADO;
+    // avança ENVIADA → ENTREGUE → LIDA conforme ServidorCentral._avancarEstadoMensagem().
+    this.status = status;
   }
 
   toJSON() {
@@ -60,6 +64,7 @@ class Pacote {
       destinatarios: this.destinatarios,
       tipo: this.tipo,
       timestamp: this.timestamp,
+      status: this.status,
     };
   }
 }

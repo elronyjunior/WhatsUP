@@ -22,6 +22,11 @@ let grupos        = new Map();         // Map<grupoId, { id, nome, membros, cria
 let buscaQuery    = '';
 let historicoCarregado = new Set();    // Conversas cujo histórico já foi carregado
 
+// ─── Padrão State: Presença do Usuário ────────────────────────────────────────
+const LIMITE_INATIVIDADE_MS = 3 * 60 * 1000; // 3 min sem interação → Ausente
+let timerInatividade = null;
+let audioCtxNotificacao = null;        // reaproveitado entre os "plins" p/ não recriar o contexto
+
 conversas.set('geral', []);
 
 // ─── Inicialização ────────────────────────────────────────────────────────────
@@ -205,6 +210,7 @@ function conectar(nome) {
   socket.on('connect', () => {
     console.log(`✅ Conectado ao ServidorCentral: ${socket.id}`);
     celularUsuario = new CelularUsuario(nome, socket);
+    celularUsuario.ganchosUI = criarGanchosUI();
     socket.emit('registrar_usuario', nome);
     mostrarChat(nome);
   });
@@ -288,6 +294,12 @@ function conectar(nome) {
   socket.on('sistema_mensagem', (dados) => {
     adicionarMensagemSistema(dados.texto, dados.tipo.toLowerCase());
   });
+
+  // Padrão State (EstadoMensagem): o servidor avisa que uma mensagem minha
+  // avançou de estado (ENTREGUE ou LIDA) — atualiza o check na tela.
+  socket.on('status_mensagem_atualizado', ({ id, status }) => {
+    atualizarStatusMensagem(id, status);
+  });
 }
 
 /**
@@ -331,6 +343,9 @@ function mostrarChat(nome) {
   renderizarConversas();
   setupChatEvents();
   setupModalGrupo();
+  setupMenuPresenca();
+  iniciarMonitorInatividade();
+  solicitarPermissaoNotificacaoSeNecessario();
 
   // Carrega histórico do Canal Geral
   carregarHistorico('geral');
@@ -424,6 +439,7 @@ function abrirConversa(id) {
   renderizarConversas();
   renderizarMensagensAtuais();
   atualizarHeader(id);
+  marcarComoLidaSeNecessario(id);
 
   // Em telas de celular a lista de conversas e o chat ocupam a tela toda,
   // alternando como no WhatsApp. Em telas largas essa classe não tem efeito.
@@ -466,19 +482,34 @@ function adicionarMensagemConversa(pacote) {
   if (!conversas.has(chave)) conversas.set(chave, []);
   conversas.get(chave).push(pacote);
 
+  // A conversa "em foco" é a que está aberta E com a aba/janela visível —
+  // só nesse caso o usuário está mesmo olhando a mensagem chegar ao vivo.
+  const conversaEmFoco = chave === conversaAtiva && !document.hidden;
+
   if (chave === conversaAtiva) {
     renderizarMensagem(pacote);
   } else {
     naoLidas.set(chave, (naoLidas.get(chave) || 0) + 1);
-    const label = pacote.tipo === 'PUBLICO'
-      ? `${pacote.remetente} (Geral)`
-      : pacote.tipo === 'GRUPO'
-        ? `${pacote.remetente} (${grupos.get(chave)?.nome || 'Grupo'})`
-        : pacote.remetente;
-    mostrarToast(`💬 ${label}: ${pacote.texto.slice(0, 40)}`, 'info');
   }
 
   renderizarConversas();
+
+  // Padrão State: a reação a uma mensagem recebida (som, toast, notificação
+  // nativa, auto-resposta...) é decidida pelo EstadoPresenca atual — nunca
+  // para mensagens ecoadas de volta por mim mesmo, nem para a conversa que
+  // já está sendo olhada em primeiro plano.
+  if (pacote.remetente !== meuNome && celularUsuario && !conversaEmFoco) {
+    celularUsuario.receberMensagem(pacote, chave);
+  }
+
+  // Padrão State (EstadoMensagem): se a conversa já está aberta e em foco,
+  // a mensagem acabou de ser vista — o check azul não espera eu reabrir a
+  // conversa depois, avisa o servidor agora mesmo.
+  if (pacote.tipo === 'PRIVADO' && pacote.remetente !== meuNome && conversaEmFoco) {
+    socket.emit('marcar_como_lida', {
+      mensagens: [{ id: pacote.id, remetente: pacote.remetente, timestamp: pacote.timestamp }],
+    });
+  }
 }
 
 // ─── Renderização do Sidebar ──────────────────────────────────────────────────
@@ -574,11 +605,12 @@ function renderizarConversas() {
       const ultima      = msgs.length ? msgs[msgs.length - 1] : null;
       const qtdNaoLidas = naoLidas.get(u.nome) || 0;
       const ativo       = conversaAtiva === u.nome;
+      const info        = infoEstadoPresenca(u.offline ? 'Offline' : u.estado);
       return `
         <div class="conversa-item ${ativo ? 'ativa' : ''} ${u.offline ? 'offline' : ''}"
              onclick="abrirConversa('${u.nome}')">
           <div class="conv-avatar usuario">${u.nome.charAt(0).toUpperCase()}</div>
-          <div class="conv-status-dot ${u.offline ? 'offline' : 'online'}"></div>
+          <div class="conv-status-dot ${info.cssClass}" title="${info.texto}"></div>
           <div class="conv-info">
             <div class="conv-top">
               <span class="conv-nome">${escapeHtml(u.nome)}</span>
@@ -636,10 +668,11 @@ function atualizarHeader(id) {
 
   } else {
     const online = usuariosOnline.find((u) => u.nome === id);
+    const info   = infoEstadoPresenca(online?.estado || 'Offline');
     iconEl.textContent  = id.charAt(0).toUpperCase();
     iconEl.className    = 'chat-channel-icon privado-icon';
     nomeEl.textContent  = id;
-    subEl.textContent   = online ? '🟢 Online agora' : '⚫ Offline';
+    subEl.textContent   = `${info.emoji} ${info.texto}`;
     badgeEl.textContent = 'PRIVADO';
     badgeEl.className   = 'badge-estrategia privado';
   }
@@ -676,7 +709,7 @@ function renderizarMensagem(pacote) {
         <div class="msg-texto">${formatarTexto(pacote.texto)}</div>
         <div class="msg-meta">
           <span class="msg-hora">${hora}</span>
-          ${isMeu ? `<svg class="msg-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>` : ''}
+          ${isMeu ? renderizarCheckMensagem(pacote) : ''}
         </div>
       </div>
     `;
@@ -772,6 +805,241 @@ function criarGrupo() {
 
   socket.emit('criar_grupo', { nome: nomeGrupo, membros });
   fecharModal();
+}
+
+// ─── Padrão State: Presença do Usuário ────────────────────────────────────────
+
+/**
+ * Monta os "ganchos de UI" que os EstadoPresenca concretos usam para
+ * produzir efeitos (som, toast, notificação nativa) sem que CelularUsuario
+ * precise conhecer o DOM — mantém o núcleo (core/) livre de renderização,
+ * do mesmo jeito que EstrategiaEnvio nunca toca a tela.
+ */
+function criarGanchosUI() {
+  return {
+    tocarSom: tocarSomNotificacao,
+    janelaOculta: () => document.hidden,
+    notificarNativo: (pacote, chaveConversa) => exibirNotificacaoNativa(pacote, chaveConversa),
+    exibirToast: (pacote, chaveConversa) => {
+      mostrarToast(`💬 ${rotuloRemetente(pacote, chaveConversa)}: ${pacote.texto.slice(0, 40)}`, 'info');
+    },
+  };
+}
+
+/** Monta o rótulo "Fulano (Contexto)" usado no toast e na notificação nativa */
+function rotuloRemetente(pacote, chaveConversa) {
+  if (pacote.tipo === 'PUBLICO') return `${pacote.remetente} (Geral)`;
+  if (pacote.tipo === 'GRUPO')   return `${pacote.remetente} (${grupos.get(chaveConversa)?.nome || 'Grupo'})`;
+  return pacote.remetente;
+}
+
+/**
+ * Toca um som curto de notificação ("plim") sintetizado via Web Audio API —
+ * evita depender de um arquivo de áudio externo.
+ */
+function tocarSomNotificacao() {
+  try {
+    audioCtxNotificacao = audioCtxNotificacao || new (window.AudioContext || window.webkitAudioContext)();
+    const agora = audioCtxNotificacao.currentTime;
+    const osc  = audioCtxNotificacao.createOscillator();
+    const gain = audioCtxNotificacao.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, agora);
+    osc.frequency.exponentialRampToValueAtTime(660, agora + 0.15);
+    gain.gain.setValueAtTime(0.15, agora);
+    gain.gain.exponentialRampToValueAtTime(0.001, agora + 0.35);
+    osc.connect(gain).connect(audioCtxNotificacao.destination);
+    osc.start(agora);
+    osc.stop(agora + 0.35);
+  } catch (err) {
+    console.warn('[Presença] Não foi possível tocar o som de notificação:', err.message);
+  }
+}
+
+/** Solicita permissão de notificação nativa uma única vez, sob demanda */
+function solicitarPermissaoNotificacaoSeNecessario() {
+  if (typeof Notification === 'undefined') return;
+  if (Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => {});
+  }
+}
+
+/**
+ * Exibe uma notificação nativa do sistema operacional — usada pelo
+ * EstadoOnline/EstadoAusente quando a janela está oculta/minimizada.
+ */
+function exibirNotificacaoNativa(pacote, chaveConversa) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+
+  const notif = new Notification(rotuloRemetente(pacote, chaveConversa), {
+    body: pacote.texto.slice(0, 120),
+    tag: chaveConversa, // agrupa notificações da mesma conversa
+  });
+
+  notif.onclick = () => {
+    window.focus();
+    abrirConversa(chaveConversa);
+    notif.close();
+  };
+}
+
+/** Liga os listeners que detectam atividade do mouse/teclado/toque */
+function iniciarMonitorInatividade() {
+  ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'].forEach((evento) => {
+    document.addEventListener(evento, registrarAtividade, { passive: true });
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) registrarAtividade();
+  });
+  reiniciarTimerInatividade();
+}
+
+/**
+ * Transição Interna (self-transitioning): atividade recente volta o estado
+ * Ausente para Online automaticamente; qualquer atividade também reinicia
+ * a contagem para a próxima expiração por inatividade. Não Perturbe é uma
+ * escolha explícita do usuário — atividade (ou a falta dela) não a altera.
+ */
+function registrarAtividade() {
+  if (celularUsuario?.getEstadoPresenca()?.rotulo === 'Ausente') {
+    mudarEstadoPresenca(new EstadoOnline());
+  }
+  reiniciarTimerInatividade();
+}
+
+function reiniciarTimerInatividade() {
+  clearTimeout(timerInatividade);
+  timerInatividade = setTimeout(() => {
+    if (celularUsuario?.getEstadoPresenca()?.rotulo === 'Online') {
+      mudarEstadoPresenca(new EstadoAusente());
+    }
+  }, LIMITE_INATIVIDADE_MS);
+}
+
+/** Transição Externa (context-driven): troca de estado vinda da UI */
+function mudarEstadoPresenca(novoEstado) {
+  if (!celularUsuario) return;
+  celularUsuario.mudarEstadoPresenca(novoEstado);
+  atualizarIndicadorPresencaPropria(novoEstado);
+}
+
+function atualizarIndicadorPresencaPropria(estado) {
+  const dot   = document.getElementById('status-dot-proprio');
+  const label = document.getElementById('status-label-proprio');
+  if (dot)   dot.className     = `status-dot ${estado.corCss}`;
+  if (label) label.textContent = estado.rotulo;
+}
+
+/** Liga o botão de status e o menu dropdown (Online / Ausente / Não perturbe) */
+function setupMenuPresenca() {
+  const btn  = document.getElementById('btn-status-presenca');
+  const menu = document.getElementById('menu-status-presenca');
+  if (!btn || !menu) return;
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const aberto = menu.classList.toggle('aberto');
+    btn.setAttribute('aria-expanded', String(aberto));
+  });
+
+  menu.querySelectorAll('.status-opcao').forEach((opcao) => {
+    opcao.addEventListener('click', () => {
+      const estado = criarEstadoPresencaPorChave(opcao.dataset.estado);
+      if (estado) mudarEstadoPresenca(estado);
+      menu.classList.remove('aberto');
+      btn.setAttribute('aria-expanded', 'false');
+    });
+  });
+
+  // Fecha o menu ao clicar fora dele
+  document.addEventListener('click', () => {
+    menu.classList.remove('aberto');
+    btn.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function criarEstadoPresencaPorChave(chave) {
+  switch (chave) {
+    case 'online':  return new EstadoOnline();
+    case 'ausente': return new EstadoAusente();
+    case 'dnd':     return new EstadoNaoPerturbe();
+    default: return null;
+  }
+}
+
+/** Traduz o rótulo de presença (vindo do servidor) em emoji + classe CSS + texto */
+function infoEstadoPresenca(rotulo) {
+  switch (rotulo) {
+    case 'Ausente':      return { emoji: '🌙', cssClass: 'ausente', texto: 'Ausente' };
+    case 'Não Perturbe': return { emoji: '⛔', cssClass: 'dnd',     texto: 'Não perturbe' };
+    case 'Offline':      return { emoji: '⚫', cssClass: 'offline', texto: 'Offline' };
+    default:             return { emoji: '🟢', cssClass: 'online',  texto: 'Online agora' };
+  }
+}
+
+// ─── Padrão State: Status da Mensagem (check azul) ────────────────────────────
+// Só se aplica a mensagens PRIVADO — Público/Grupo/Secreto mantêm o check
+// único estático de sempre (leitura em 1-1 é o caso bem definido pelo pedido;
+// "lido por todos" num grupo é uma semântica bem mais complexa, fora de escopo).
+
+/** Fábrica de EstadoMensagem a partir do rótulo enviado pelo servidor */
+function criarEstadoMensagemPorRotulo(rotulo) {
+  switch (rotulo) {
+    case 'ENTREGUE': return new EstadoEntregue();
+    case 'LIDA':     return new EstadoLida();
+    default:         return new EstadoEnviada();
+  }
+}
+
+/** Monta o HTML do check de uma mensagem, de acordo com tipo + status atual */
+function renderizarCheckMensagem(pacote) {
+  if (pacote.tipo !== 'PRIVADO') {
+    return new EstadoEnviada().renderizarCheck();
+  }
+  return criarEstadoMensagemPorRotulo(pacote.status).renderizarCheck();
+}
+
+/**
+ * Avisa o servidor que as mensagens passadas (de uma conversa PRIVADO) foram
+ * vistas agora — dispara a transição para EstadoLida (check azul). Chamado
+ * ao abrir a conversa; mensagens que chegam com a conversa já aberta e em
+ * foco são marcadas na hora, direto em adicionarMensagemConversa().
+ */
+function marcarComoLidaSeNecessario(chaveLocal) {
+  if (chaveLocal === 'geral' || grupos.has(chaveLocal)) return; // só 1-1 tem check azul
+  const meuNome = celularUsuario?.nome;
+  const msgs = conversas.get(chaveLocal) || [];
+  const paraMarcar = msgs
+    .filter((m) => m.tipo === 'PRIVADO' && m.remetente !== meuNome && m.status !== 'LIDA')
+    .map((m) => ({ id: m.id, remetente: m.remetente, timestamp: m.timestamp }));
+
+  if (paraMarcar.length > 0) {
+    socket.emit('marcar_como_lida', { mensagens: paraMarcar });
+  }
+}
+
+/**
+ * Aplica uma atualização de status (ENTREGUE/LIDA) vinda do servidor: guarda
+ * no objeto em memória (para sobreviver a re-renderizações futuras) e, se o
+ * balão dessa mensagem estiver na tela agora, troca o check ali mesmo.
+ */
+function atualizarStatusMensagem(id, status) {
+  let pacoteAtualizado = null;
+  for (const msgs of conversas.values()) {
+    const alvo = msgs.find((m) => m.id === id);
+    if (alvo) {
+      alvo.status = status;
+      pacoteAtualizado = alvo;
+      break;
+    }
+  }
+  if (!pacoteAtualizado) return;
+
+  const bubble = document.querySelector(`.message-wrapper[data-id="${id}"]`);
+  const checkAntigo = bubble?.querySelector('.msg-check');
+  if (checkAntigo) {
+    checkAntigo.outerHTML = renderizarCheckMensagem(pacoteAtualizado);
+  }
 }
 
 // ─── Mensagem do Sistema ──────────────────────────────────────────────────────

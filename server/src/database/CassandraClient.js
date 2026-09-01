@@ -1,5 +1,5 @@
 const cassandra = require('cassandra-driver');
-const { SCHEMA_QUERIES } = require('./schema');
+const { SCHEMA_QUERIES, MIGRACOES } = require('./schema');
 
 /**
  * CassandraClient — Singleton de conexão com o Cassandra
@@ -56,6 +56,18 @@ class CassandraClient {
     for (const query of SCHEMA_QUERIES) {
       await this.client.execute(query);
     }
+
+    // Migrações: idempotentes na prática, mas o driver não tem "ADD COLUMN
+    // IF NOT EXISTS" — então cada uma roda isolada e uma falha (coluna já
+    // existente de uma execução anterior) não derruba a inicialização.
+    for (const query of MIGRACOES) {
+      try {
+        await this.client.execute(query);
+      } catch (err) {
+        console.warn(`⚠️  [Cassandra] Migração ignorada (provavelmente já aplicada antes): ${err.message}`);
+      }
+    }
+
     console.log('✅ [Cassandra] Schema inicializado (tabelas criadas)');
   }
 

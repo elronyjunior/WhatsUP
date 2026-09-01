@@ -222,6 +222,7 @@ html, body {
 
 .pattern-badge.observer { border-color: rgba(124,58,237,0.4); color: var(--color-primary-l); }
 .pattern-badge.strategy { border-color: rgba(6,182,212,0.4); color: var(--color-cyan-l); }
+.pattern-badge.state    { border-color: rgba(245,158,11,0.4); color: var(--color-yellow); }
 
 /* ─── CHAT SCREEN ────────────────────────────────────────────────── */
 #chat-screen {
@@ -307,20 +308,82 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* ─── Padrão State: dropdown de status de presença ──────────────────── */
+.perfil-status-wrap { position: relative; }
+
 .perfil-status {
   font-size: 11px;
   color: var(--color-green);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  transition: var(--transition);
 }
-.perfil-status::before {
-  content: '';
-  width: 6px; height: 6px;
+
+.perfil-status:hover { color: var(--text-primary); }
+
+.status-chevron { opacity: 0.6; flex-shrink: 0; }
+
+.status-dot {
+  width: 7px; height: 7px;
   border-radius: 50%;
-  background: var(--color-green);
   display: inline-block;
+  flex-shrink: 0;
 }
+
+.status-dot.online  { background: var(--color-green); box-shadow: 0 0 6px var(--color-green); }
+.status-dot.ausente  { background: var(--color-yellow); box-shadow: 0 0 6px var(--color-yellow); }
+.status-dot.dnd      { background: var(--color-red); box-shadow: 0 0 6px var(--color-red); }
+.status-dot.offline  { background: var(--text-muted); }
+
+.status-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 168px;
+  background: var(--bg-surface2);
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius-md);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 1500;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.status-menu.aberto {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: all;
+}
+
+.status-opcao {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  text-align: left;
+  transition: var(--transition);
+}
+
+.status-opcao:hover { background: var(--bg-hover); }
 
 /* Busca */
 .sidebar-search {
@@ -465,6 +528,8 @@ html, body {
 }
 
 .conv-status-dot.online  { background: var(--color-green); box-shadow: 0 0 6px var(--color-green); }
+.conv-status-dot.ausente { background: var(--color-yellow); box-shadow: 0 0 6px var(--color-yellow); }
+.conv-status-dot.dnd     { background: var(--color-red); box-shadow: 0 0 6px var(--color-red); }
 .conv-status-dot.offline { background: var(--text-muted); }
 
 /* Info da Conversa */
@@ -572,10 +637,12 @@ html, body {
 
 .pattern-dot.observer { background: var(--color-primary-l); }
 .pattern-dot.strategy { background: var(--color-cyan-l); }
+.pattern-dot.state    { background: var(--color-yellow); }
 .pattern-label { color: var(--text-secondary); }
 .pattern-name { font-weight: 600; margin-left: auto; }
 .pattern-name.observer { color: var(--color-primary-l); }
 .pattern-name.strategy { color: var(--color-cyan-l); }
+.pattern-name.state    { color: var(--color-yellow); }
 
 /* ─── CHAT AREA ──────────────────────────────────────────────────── */
 .chat-area {
@@ -1150,7 +1217,10 @@ html, body {
 
 .msg-hora  { font-size: 11px; color: var(--text-muted); }
 
-.msg-check { color: var(--color-cyan-l); opacity: 0.7; }
+/* Padrão State (EstadoMensagem): cinza = enviada/entregue, azul = lida */
+.msg-check { color: var(--text-muted); opacity: 0.85; flex-shrink: 0; }
+.msg-check.msg-check-duplo { margin-left: -3px; } /* os dois checks se sobrepõem um pouco, como no original */
+.msg-check.lida { color: var(--color-cyan-l); opacity: 1; }
 
 /* Mensagem de sistema */
 .sistema-msg {

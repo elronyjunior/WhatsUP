@@ -1,10 +1,14 @@
 /**
  * CelularUsuario — Implementa Observavel (Padrão Observer)
  *                  Usa EstrategiaEnvio    (Padrão Strategy)
+ *                  Usa EstadoPresenca     (Padrão State)
  *
  * Representa o dispositivo/cliente do usuário no chat.
  * Compõe uma estratégia de envio que pode ser trocada em tempo de execução,
- * e notifica o ServidorCentral (Observador) via Socket.IO.
+ * e notifica o ServidorCentral (Observador) via Socket.IO. Também mantém o
+ * estado de presença atual (Online/Não Perturbe/Ausente), que decide como
+ * reagir a uma mensagem recebida — sem esse CelularUsuario precisar saber
+ * os detalhes de cada reação.
  */
 class CelularUsuario extends Observavel {
   /**
@@ -18,6 +22,14 @@ class CelularUsuario extends Observavel {
 
     // Estratégia padrão: envio público
     this._estrategiaPrivacidade = new EnvioPublico(nome);
+
+    // Estado padrão: Online (Padrão State)
+    this._estadoPresenca = new EstadoOnline();
+
+    // Ganchos de efeitos de UI (som, notificação nativa, toast...),
+    // atribuídos pelo app.js para manter este núcleo livre de DOM —
+    // os estados concretos chamam contexto.ganchosUI.<algo>?.(...).
+    this.ganchosUI = null;
   }
 
   /**
@@ -69,5 +81,40 @@ class CelularUsuario extends Observavel {
   /** Retorna o nome da estratégia atual */
   getEstrategiaAtual() {
     return this._estrategiaPrivacidade.constructor.name;
+  }
+
+  /**
+   * mudarEstadoPresenca() — troca o EstadoPresenca em tempo de execução.
+   * Chamado tanto por transições internas (o próprio estado decide expirar,
+   * ex.: Online → Ausente por inatividade) quanto externas (o usuário
+   * escolhe um status no menu da interface).
+   *
+   * @param {EstadoPresenca} novoEstado
+   */
+  mudarEstadoPresenca(novoEstado) {
+    const anterior = this._estadoPresenca.rotulo;
+    this._estadoPresenca = novoEstado;
+    console.log(`[CelularUsuario] Estado de presença: ${anterior} → ${novoEstado.rotulo}`);
+
+    // Avisa o ServidorCentral, que também mantém um EstadoPresenca (do lado
+    // dele) para decidir como rotear mensagens futuras até este usuário.
+    this.socket.emit('mudar_estado_presenca', novoEstado.rotulo);
+  }
+
+  /** Retorna o EstadoPresenca atual */
+  getEstadoPresenca() {
+    return this._estadoPresenca;
+  }
+
+  /**
+   * receberMensagem() — ponto de entrada do Padrão State.
+   * Delega ao estado de presença atual a decisão de como reagir (som,
+   * toast, notificação nativa, auto-resposta...).
+   *
+   * @param {Object} pacote - Pacote de mensagem recebido
+   * @param {string} [chaveConversa] - Chave local da conversa correspondente
+   */
+  receberMensagem(pacote, chaveConversa) {
+    this._estadoPresenca.aoReceberMensagem(pacote, this, chaveConversa);
   }
 }

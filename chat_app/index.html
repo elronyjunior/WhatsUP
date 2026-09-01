@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0D1117" />
-  <title>ChatApp — Observer + Strategy</title>
-  <meta name="description" content="Protótipo de chat implementando os padrões de projeto Observer e Strategy em tempo real com Node.js e Socket.IO." />
+  <title>ChatApp — Observer + Strategy + State</title>
+  <meta name="description" content="Protótipo de chat implementando os padrões de projeto Observer, Strategy e State em tempo real com Node.js e Socket.IO." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
@@ -20,7 +20,7 @@
       <div class="login-logo-icon">💬</div>
       <h1>ChatApp</h1>
     </div>
-    <p class="login-subtitle">Protótipo com Observer + Strategy</p>
+    <p class="login-subtitle">Protótipo com Observer + Strategy + State</p>
 
     <!-- Abas Login / Registro -->
     <div class="auth-tabs">
@@ -111,6 +111,7 @@
     <div class="login-patterns">
       <span class="pattern-badge observer">🔔 Observer</span>
       <span class="pattern-badge strategy">⚡ Strategy</span>
+      <span class="pattern-badge state">🔄 State</span>
       <span class="pattern-badge cassandra-badge">🗄️ Cassandra</span>
     </div>
   </div>
@@ -134,7 +135,34 @@
         <div class="perfil-avatar" id="avatar-inicial">?</div>
         <div class="perfil-info">
           <div class="perfil-nome" id="nome-usuario">Usuário</div>
-          <div class="perfil-status">Online</div>
+          <!-- Padrão State: dropdown de status — transição externa (context-driven) -->
+          <div class="perfil-status-wrap">
+            <button
+              id="btn-status-presenca"
+              class="perfil-status"
+              type="button"
+              aria-haspopup="true"
+              aria-expanded="false"
+              title="Alterar meu status"
+            >
+              <span id="status-dot-proprio" class="status-dot online"></span>
+              <span id="status-label-proprio">Online</span>
+              <svg class="status-chevron" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            <div id="menu-status-presenca" class="status-menu" role="menu" aria-label="Escolher status de presença">
+              <button class="status-opcao" data-estado="online" role="menuitem" type="button">
+                <span class="status-dot online"></span> Online
+              </button>
+              <button class="status-opcao" data-estado="ausente" role="menuitem" type="button">
+                <span class="status-dot ausente"></span> Ausente
+              </button>
+              <button class="status-opcao" data-estado="dnd" role="menuitem" type="button">
+                <span class="status-dot dnd"></span> Não perturbe
+              </button>
+            </div>
+          </div>
         </div>
         <!-- Botão criar grupo -->
         <button id="btn-criar-grupo" class="btn-novo-grupo" title="Criar novo grupo">
@@ -180,6 +208,11 @@
         <div class="pattern-dot strategy"></div>
         <span class="pattern-label">Padrão</span>
         <span class="pattern-name strategy">Strategy</span>
+      </div>
+      <div class="pattern-item">
+        <div class="pattern-dot state"></div>
+        <span class="pattern-label">Padrão</span>
+        <span class="pattern-name state">State</span>
       </div>
     </div>
 
@@ -290,9 +323,17 @@
 <script src="/socket.io/socket.io.js"></script>
 <script src="js/interfaces/Observavel.js"></script>
 <script src="js/interfaces/EstrategiaEnvio.js"></script>
+<script src="js/interfaces/EstadoPresenca.js"></script>
+<script src="js/interfaces/EstadoMensagem.js"></script>
 <script src="js/models/Pacote.js"></script>
 <script src="js/strategies/EnvioPublico.js"></script>
 <script src="js/strategies/EnvioPrivado.js"></script>
+<script src="js/states/EstadoOnline.js"></script>
+<script src="js/states/EstadoNaoPerturbe.js"></script>
+<script src="js/states/EstadoAusente.js"></script>
+<script src="js/states/EstadoEnviada.js"></script>
+<script src="js/states/EstadoEntregue.js"></script>
+<script src="js/states/EstadoLida.js"></script>
 <script src="js/core/CelularUsuario.js"></script>
 <script src="js/app.js"></script>
 

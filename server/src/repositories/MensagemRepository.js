@@ -15,9 +15,9 @@ class MensagemRepository {
    * @param {string} conversaId - ID canônico da conversa
    */
   async salvarMensagem(pacote, conversaId) {
-    const query = `INSERT INTO mensagens_por_conversa 
-      (conversa_id, msg_timestamp, id, texto, remetente, destinatarios, tipo, grupo_id) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+    const query = `INSERT INTO mensagens_por_conversa
+      (conversa_id, msg_timestamp, id, texto, remetente, destinatarios, tipo, grupo_id, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     await this.db.execute(query, [
       conversaId,
@@ -28,9 +28,27 @@ class MensagemRepository {
       pacote.destinatarios || [],
       pacote.tipo,
       pacote.grupoId || null,
+      pacote.status || 'ENVIADA',
     ], { prepare: true });
 
     console.log(`💾 [MensagemRepository] Mensagem salva — conversa: "${conversaId}"`);
+  }
+
+  /**
+   * Atualiza o status (Padrão State: EstadoMensagem) de uma mensagem já
+   * persistida — ENVIADA → ENTREGUE → LIDA. Best-effort: chamado de forma
+   * assíncrona pelo ServidorCentral, sem bloquear o fluxo em tempo real.
+   * @param {string} conversaId
+   * @param {string} timestamp - ISO string do momento original de envio
+   * @param {string} id
+   * @param {string} status
+   */
+  async atualizarStatus(conversaId, timestamp, id, status) {
+    const query = `UPDATE mensagens_por_conversa SET status = ?
+      WHERE conversa_id = ? AND msg_timestamp = ? AND id = ?`;
+
+    await this.db.execute(query, [status, conversaId, new Date(timestamp), id], { prepare: true });
+    console.log(`✓ [MensagemRepository] Status atualizado — mensagem "${id}": ${status}`);
   }
 
   /**
@@ -55,6 +73,9 @@ class MensagemRepository {
       tipo: row.tipo,
       timestamp: row.msg_timestamp.toISOString(),
       grupoId: row.grupo_id || undefined,
+      // Linhas gravadas antes da migração do EstadoMensagem não têm essa
+      // coluna preenchida — assume-se ENVIADA (o estado inicial de qualquer mensagem).
+      status: row.status || 'ENVIADA',
     }));
   }
 
