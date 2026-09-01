@@ -309,9 +309,17 @@ function conectar(nome) {
       interfaceInicializada = true;
       mostrarChat(nome);
     } else {
+      // Reconexão: enquanto o socket ficou caído, o servidor me marcou
+      // Offline — qualquer mensagem PRIVADO enviada pra mim nesse intervalo
+      // não chegou ao vivo (caiu no fallback simulado) e só existe no banco.
+      // historicoCarregado bloquearia um re-fetch pra sempre (já "carregado"
+      // antes da queda), então limpa o cache pra puxar de novo do banco e
+      // recuperar o que foi perdido — sem isso, só reaparecia com F5.
+      historicoCarregado.clear();
       renderizarConversas();
       renderizarMensagensAtuais();
       atualizarHeader(conversaAtiva);
+      carregarHistorico(conversaAtiva);
       mostrarToast('✅ Conexão restabelecida.', 'sucesso');
     }
   });
@@ -1479,12 +1487,16 @@ function iniciarMonitorInatividade() {
 
 /**
  * Transição Interna (self-transitioning): atividade recente volta o estado
- * Ausente para Online automaticamente; qualquer atividade também reinicia
- * a contagem para a próxima expiração por inatividade. Não Perturbe é uma
- * escolha explícita do usuário — atividade (ou a falta dela) não a altera.
+ * Ausente para Online automaticamente — mas SÓ quando foi o próprio timer de
+ * inatividade quem entrou nesse estado (estado.automatico). Se o usuário
+ * escolheu "Ausente" manualmente no menu, isso fica valendo até ele trocar de
+ * novo — senão o próprio clique que seleciona a opção já dispara esta função
+ * (o clique borbulha até o document) e desfaz a escolha na hora.
+ * Não Perturbe é uma escolha explícita do usuário — atividade não a altera.
  */
 function registrarAtividade() {
-  if (celularUsuario?.getEstadoPresenca()?.rotulo === 'Ausente') {
+  const estado = celularUsuario?.getEstadoPresenca();
+  if (estado?.rotulo === 'Ausente' && estado.automatico) {
     mudarEstadoPresenca(new EstadoOnline());
   }
   reiniciarTimerInatividade();
@@ -1494,7 +1506,7 @@ function reiniciarTimerInatividade() {
   clearTimeout(timerInatividade);
   timerInatividade = setTimeout(() => {
     if (celularUsuario?.getEstadoPresenca()?.rotulo === 'Online') {
-      mudarEstadoPresenca(new EstadoAusente());
+      mudarEstadoPresenca(new EstadoAusente(true)); // automático — por inatividade
     }
   }, LIMITE_INATIVIDADE_MS);
 }

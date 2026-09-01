@@ -11,10 +11,18 @@
  * período Ausente durar.
  */
 class EstadoAusente extends EstadoPresenca {
-  constructor() {
+  /**
+   * @param {boolean} automatico - true quando é o próprio monitor de
+   *   inatividade quem está entrando nesse estado (self-transitioning);
+   *   false (padrão) quando foi o usuário quem escolheu manualmente no menu.
+   *   Só o automático pode voltar sozinho pra Online ao detectar atividade —
+   *   uma escolha manual não pode ser desfeita pelo mesmo clique que a fez.
+   */
+  constructor(automatico = false) {
     super();
     /** @type {Set<string>} remetentes que já receberam a auto-resposta nesta sessão Ausente */
     this._jaRespondido = new Set();
+    this.automatico = automatico;
   }
 
   aoReceberMensagem(pacote, contexto, chaveConversa) {
