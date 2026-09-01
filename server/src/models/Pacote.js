@@ -1,41 +1,7 @@
-/**
- * Gera um UUID v4.
- *
- * crypto.randomUUID() exige contexto seguro (HTTPS).
- * Como o projeto pode estar sendo executado via HTTP na AWS,
- * usamos crypto.getRandomValues() como fallback.
- */
-function gerarUUID() {
-  if (typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-
-  // UUID versão 4
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-
-  // Variante RFC 4122
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-
-  const hex = Array.from(
-    bytes,
-    byte => byte.toString(16).padStart(2, '0')
-  );
-
-  return (
-    hex.slice(0, 4).join('') + '-' +
-    hex.slice(4, 6).join('') + '-' +
-    hex.slice(6, 8).join('') + '-' +
-    hex.slice(8, 10).join('') + '-' +
-    hex.slice(10, 16).join('')
-  );
-}
+const { v4: uuidv4 } = require('uuid');
 
 /**
- * Modelo Pacote — Objeto de dados transportado
- * entre CelularUsuario e ServidorCentral
+ * Modelo Pacote - Objeto de dados que trafega entre CelularUsuario e ServidorCentral
  */
 class Pacote {
   constructor({
@@ -43,13 +9,17 @@ class Pacote {
     remetente,
     destinatarios = [],
     tipo = 'PUBLICO',
+    modoExceto = false,
+    contextoOrigem = 'geral',  // 'geral', 'grupo_xxx', ou nomeUsuario (privado)
     status = 'ENVIADA'
   }) {
-    this.id = gerarUUID();
+    this.id = uuidv4();
     this.texto = texto;
     this.remetente = remetente;
     this.destinatarios = destinatarios;
     this.tipo = tipo;
+    this.modoExceto = modoExceto; // Para mensagens SECRETO: indica "todos exceto"
+    this.contextoOrigem = contextoOrigem; // Rastreia onde a mensagem foi enviada
     this.timestamp = new Date().toISOString();
     // Padrão State (EstadoMensagem) — só é relevante para mensagens PRIVADO;
     // avança ENVIADA → ENTREGUE → LIDA conforme ServidorCentral._avancarEstadoMensagem().
@@ -63,6 +33,7 @@ class Pacote {
       remetente: this.remetente,
       destinatarios: this.destinatarios,
       tipo: this.tipo,
+      contextoOrigem: this.contextoOrigem,
       timestamp: this.timestamp,
       status: this.status,
     };

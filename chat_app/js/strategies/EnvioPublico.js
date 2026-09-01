@@ -17,14 +17,16 @@ class EnvioPublico extends EstrategiaEnvio {
    * Empacota a mensagem com tipo PUBLICO e sem destinatários específicos.
    * @param {string} texto
    * @param {string[]} destinatarios - Ignorado nesta estratégia (todos recebem)
+   * @param {string} contextoOrigem - Onde a mensagem está sendo enviada (padrão: 'geral')
    * @returns {Pacote}
    */
-  empacotarMensagem(texto, destinatarios = []) {
+  empacotarMensagem(texto, destinatarios = [], contextoOrigem = 'geral') {
     return new Pacote({
       texto,
       remetente: this.remetente,
       destinatarios: [],   // público = sem restrição de destinatários
       tipo: 'PUBLICO',
+      contextoOrigem,
     });
   }
 }

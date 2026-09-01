@@ -42,13 +42,17 @@ class Pacote {
     texto,
     remetente,
     destinatarios = [],
-    tipo = 'PUBLICO'
+    tipo = 'PUBLICO',
+    modoExceto = false,
+    contextoOrigem = 'geral'  // 'geral', 'grupo_xxx', ou nomeUsuario (privado)
   }) {
     this.id = gerarUUID();
     this.texto = texto;
     this.remetente = remetente;
     this.destinatarios = destinatarios;
     this.tipo = tipo;
+    this.modoExceto = modoExceto; // Para mensagens SECRETO: indica "todos exceto"
+    this.contextoOrigem = contextoOrigem; // Rastreia onde a mensagem foi enviada
     this.timestamp = new Date().toISOString();
   }
 
@@ -59,6 +63,8 @@ class Pacote {
       remetente: this.remetente,
       destinatarios: this.destinatarios,
       tipo: this.tipo,
+      modoExceto: this.modoExceto,
+      contextoOrigem: this.contextoOrigem,
       timestamp: this.timestamp,
     };
   }

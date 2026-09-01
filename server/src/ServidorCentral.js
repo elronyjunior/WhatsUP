@@ -143,6 +143,18 @@ class ServidorCentral extends Observador {
         console.log(
           `📦 [ServidorCentral] Pacote recebido de "${pacote.remetente}" — Tipo: ${pacote.tipo}`
         );
+
+        // Se for SECRETO com modoExceto, resolve a lista final de receptores
+        if (pacote.tipo === 'SECRETO' && dadosPacote.modoExceto) {
+          const todosOnline = Array.from(this.usuariosConectados.values());
+          // Exclusivo: todos online exceto os selecionados (e exceto o próprio remetente)
+          const receptoresFinais = todosOnline.filter(
+            (nome) => !pacote.destinatarios.includes(nome) && nome !== pacote.remetente
+          );
+          pacote.destinatarios = receptoresFinais;
+          console.log(`🔐 [ServidorCentral] SECRETO (modo EXCETO) — receptores finais: [${receptoresFinais.join(', ')}]`);
+        }
+
         this.receberNotificacao(pacote, socket);
 
         // Persistir no Cassandra (usa o tipo real para conversaId)
@@ -158,6 +170,64 @@ class ServidorCentral extends Observador {
           console.error('[ServidorCentral] Erro ao salvar mensagem:', err.message);
         }
       });
+
+      /**
+       * Mensagem Secreta Custom — Painel de seleção de destinatários
+       * Recebe: { texto, remetente, destinatarios[], modoExceto, conversaId }
+       *  - modoExceto=false → só os selecionados recebem (inclusivo)
+       *  - modoExceto=true  → todos EXCETO os selecionados recebem (exclusivo)
+       * O remetente sempre recebe (para ver no próprio histórico).
+       */
+      socket.on('mensagem_secreta_custom', async (dados) => {
+        const { texto, remetente, destinatarios = [], modoExceto = false, conversaId, contextoOrigem = 'geral' } = dados;
+        const todosOnline = Array.from(this.usuariosConectados.values());
+
+        // Resolve lista final de quem recebe (excluindo sempre o remetente — ele já recebe separado)
+        let receptores;
+        if (modoExceto) {
+          // Exclusivo: todos online exceto os selecionados (e exceto o próprio remetente)
+          receptores = todosOnline.filter(
+            (nome) => !destinatarios.includes(nome) && nome !== remetente
+          );
+        } else {
+          // Inclusivo: só os selecionados (excluindo o remetente da lista — ele recebe separado)
+          receptores = destinatarios.filter((nome) => nome !== remetente);
+        }
+
+        const pacote = {
+          id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          texto,
+          remetente,
+          destinatarios: receptores,
+          tipo: 'SECRETO',
+          modoExceto,
+          contextoOrigem,
+          timestamp: new Date().toISOString(),
+        };
+
+        console.log(
+          `🔐 [ServidorCentral] Mensagem SECRETA CUSTOM de "${remetente}" — modo: ${modoExceto ? 'EXCETO' : 'INCLUSIVO'} — receptores: [${receptores.join(', ')}] — contexto: ${contextoOrigem}`
+        );
+
+        // Envia para o remetente (sempre vê a própria mensagem)
+        socket.emit('mensagem_recebida', pacote);
+
+        // Envia para os receptores resolvidos
+        this.usuariosConectados.forEach((nome, socketId) => {
+          if (receptores.includes(nome)) {
+            this.io.to(socketId).emit('mensagem_recebida', pacote);
+          }
+        });
+
+        // Persistir no Cassandra
+        try {
+          const idConversa = conversaId || 'geral';
+          await this.mensagemRepo.salvarMensagem(pacote, idConversa);
+        } catch (err) {
+          console.error('[ServidorCentral] Erro ao salvar mensagem secreta custom:', err.message);
+        }
+      });
+
 
       // Criar grupo
       socket.on('criar_grupo', async ({ nome, membros }) => {
@@ -293,6 +363,7 @@ class ServidorCentral extends Observador {
    * Roteia o pacote conforme a estratégia aplicada pelo CelularUsuario
    * PUBLICO  → broadcast para todos
    * PRIVADO  → entrega somente para os destinatários
+   * SECRETO  → entrega para destinatários selecionados (não para quem fica de fora), exceto se for privado
    * Se a mensagem PUBLICA contém @menções → vira SECRETO (só mencionados veem)
    */
   _rotearMensagem(pacote, socketRemetente) {
@@ -332,6 +403,23 @@ class ServidorCentral extends Observador {
       pacote.destinatarios
         .filter((nome) => nome !== pacote.remetente)
         .forEach((nome) => this._processarEntregaPrivada(pacote, nome));
+
+    } else if (pacote.tipo === 'SECRETO') {
+      // Mensagem secreta (EnvioSecreto/modoExceto já resolvido antes de chegar
+      // aqui, ou @menção detectada acima): entrega para os destinatários
+      // finais + remetente. A pessoa que "fica de fora" não recebe — está em
+      // destinatarios quem RECEBE, não quem NÃO recebe.
+      console.log(
+        `🔐 [ServidorCentral] Roteando SECRETO → receptores: [${pacote.destinatarios.join(', ')}]`
+      );
+      socketRemetente.emit('mensagem_recebida', pacote.toJSON());
+      // Mesmo tratamento via Padrão State que PRIVADO/GRUPO — um receptor
+      // offline cai no fallback simulado em vez de silêncio total. Sem
+      // EstadoMensagem (check azul) aqui: "lido por todos" é uma semântica
+      // de múltiplos destinatários, fora do escopo (igual GRUPO).
+      pacote.destinatarios
+        .filter((nome) => nome !== pacote.remetente)
+        .forEach((nome) => this._entregarPara(nome, pacote));
     }
   }
 
