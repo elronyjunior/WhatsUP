@@ -409,7 +409,12 @@ function conectar(nome) {
   });
 
   socket.on('sistema_mensagem', (dados) => {
-    adicionarMensagemSistema(dados.texto, dados.tipo.toLowerCase());
+    // ENTRADA/SAIDA são avisos do Canal Geral (quem entrou/saiu do chat) —
+    // não fazem sentido aparecendo no meio de uma privada ou grupo que
+    // esteja aberta no momento. Bug antigo: isso nunca checava conversaAtiva.
+    if (conversaAtiva === 'geral') {
+      adicionarMensagemSistema(dados.texto, dados.tipo.toLowerCase());
+    }
   });
 
   // Padrão State (EstadoMensagem): o servidor avisa que uma mensagem minha
