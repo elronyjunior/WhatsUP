@@ -489,7 +489,6 @@ function mostrarChat(nome) {
   setupChatEvents();
   setupModalGrupo();
   setupMenuPresenca();
-  setupComandos();
   iniciarMonitorInatividade();
   solicitarPermissaoNotificacaoSeNecessario();
 
@@ -891,7 +890,6 @@ function adicionarMensagemConversa(pacote) {
   // nenhuma ação extra do usuário além de mandar a mensagem.
   if (pacote.remetente === meuNome && !pacote.apagada) {
     historicoComandos.registrar(new ComandoEnviarMensagem(pacote, chave, enviarComandoApagar));
-    atualizarBotoesDesfazerRefazer();
   }
 }
 
@@ -1763,7 +1761,6 @@ function apagarMensagemParaTodos(id) {
   if (!pacote || !celularUsuario || pacote.remetente !== celularUsuario.nome || pacote.apagada) return;
 
   historicoComandos.executar(new ComandoApagarParaTodos(pacote, conversaAtiva, enviarComandoApagar));
-  atualizarBotoesDesfazerRefazer();
   mostrarToast('🗑️ Mensagem apagada para todos', 'info');
 }
 
@@ -1803,7 +1800,6 @@ function iniciarEdicaoMensagem(id) {
     historicoComandos.executar(
       new ComandoEditarMensagem(pacote, conversaAtiva, novoTexto, enviarComandoEditar)
     );
-    atualizarBotoesDesfazerRefazer();
   };
 
   areaTexto.querySelector('.msg-editar-btn.cancelar').addEventListener('click', cancelar);
@@ -1814,56 +1810,6 @@ function iniciarEdicaoMensagem(id) {
       salvar();
     } else if (e.key === 'Escape') {
       cancelar();
-    }
-  });
-}
-
-/** Desfaz o último comando (envio/edição/exclusão) do histórico, se houver */
-function desfazerUltimoComando() {
-  const comando = historicoComandos.desfazer();
-  if (comando) mostrarToast(`↺ Desfeito: ${comando.rotulo}`, 'info');
-  atualizarBotoesDesfazerRefazer();
-}
-
-/** Refaz o último comando desfeito, se houver */
-function refazerUltimoComando() {
-  const comando = historicoComandos.refazer();
-  if (comando) mostrarToast(`↻ Refeito: ${comando.rotulo}`, 'info');
-  atualizarBotoesDesfazerRefazer();
-}
-
-/** Habilita/desabilita os botões de desfazer/refazer conforme o histórico */
-function atualizarBotoesDesfazerRefazer() {
-  const btnDesfazer = document.getElementById('btn-desfazer');
-  const btnRefazer = document.getElementById('btn-refazer');
-  if (btnDesfazer) btnDesfazer.disabled = !historicoComandos.podeDesfazer;
-  if (btnRefazer) btnRefazer.disabled = !historicoComandos.podeRefazer;
-}
-
-/** Liga os botões de desfazer/refazer e os atalhos de teclado Ctrl+Z / Ctrl+Y */
-function setupComandos() {
-  const btnDesfazer = document.getElementById('btn-desfazer');
-  const btnRefazer = document.getElementById('btn-refazer');
-
-  btnDesfazer?.addEventListener('click', desfazerUltimoComando);
-  btnRefazer?.addEventListener('click', refazerUltimoComando);
-  atualizarBotoesDesfazerRefazer();
-
-  document.addEventListener('keydown', (e) => {
-    // Não rouba Ctrl+Z/Y de dentro de um campo de texto (ex.: o próprio
-    // textarea de edição, ou o campo de mensagem) — lá vale o undo nativo.
-    const emCampoDeTexto = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
-    if (emCampoDeTexto) return;
-
-    const ctrlOuCmd = e.ctrlKey || e.metaKey;
-    if (!ctrlOuCmd) return;
-
-    if (!e.shiftKey && e.key.toLowerCase() === 'z') {
-      e.preventDefault();
-      desfazerUltimoComando();
-    } else if (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z')) {
-      e.preventDefault();
-      refazerUltimoComando();
     }
   });
 }

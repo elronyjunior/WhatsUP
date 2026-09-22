@@ -744,41 +744,6 @@ html, body {
   border: 1px solid rgba(245,158,11,0.3);
 }
 
-/* ─── Padrão Command: desfazer / refazer ─────────────────────────── */
-.header-acoes-comando {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.btn-comando {
-  width: 30px;
-  height: 30px;
-  background: var(--bg-surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: var(--transition);
-  flex-shrink: 0;
-}
-
-.btn-comando:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-  border-color: var(--border-active);
-}
-
-.btn-comando:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
 /* ─── Botão Voltar (mobile) ──────────────────────────────────────── */
 .btn-voltar-mobile {
   display: none;
