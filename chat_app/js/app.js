@@ -367,6 +367,20 @@ function conectar(nome) {
     }
   });
 
+  // Restaura conversas privadas com quem está offline agora — sem isso só
+  // usuários conectados neste exato momento (via 'lista_usuarios') ganham
+  // entrada na barra lateral, e uma conversa antiga "some" mesmo intacta
+  // no banco (bug: nada restaurava isso no login).
+  socket.on('lista_conversas_privadas', (lista) => {
+    lista.forEach(({ outroUsuario }) => {
+      if (!conversas.has(outroUsuario)) {
+        conversas.set(outroUsuario, []);
+      }
+    });
+
+    renderizarConversas();
+  });
+
   socket.on('lista_grupos', (listaGrupos) => {
     listaGrupos.forEach((g) => {
       grupos.set(g.id, g);
@@ -394,10 +408,14 @@ function conectar(nome) {
     }
   });
 
-  socket.on('historico_carregado', ({ conversaId, mensagens }) => {
+  socket.on('historico_carregado', ({ conversaId, chaveLocal: chaveEcoada, mensagens }) => {
     if (!mensagens || mensagens.length === 0) return;
 
-    const chaveLocal = mapearConversaIdParaLocal(conversaId);
+    // Preferir a chave que o próprio cliente mandou (o servidor só ecoa de
+    // volta): decodificar o conversaId por split('_') quebra se um nome de
+    // usuário contiver "_". mapearConversaIdParaLocal fica só como fallback
+    // pra histórico pedido antes dessa mudança.
+    const chaveLocal = chaveEcoada || mapearConversaIdParaLocal(conversaId);
 
     if (!conversas.has(chaveLocal)) {
       conversas.set(chaveLocal, []);
@@ -695,6 +713,7 @@ function carregarHistorico(chaveLocal) {
   historicoCarregado.add(conversaId);
   socket.emit('carregar_historico', {
     conversaId,
+    chaveLocal,
     limite: 50,
   });
 }

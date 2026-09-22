@@ -80,6 +80,17 @@ class ServidorCentral extends Observador {
         // Envia lista de grupos existentes para o novo usuário
         socket.emit('lista_grupos', this._serializarGrupos(nome));
 
+        // Restaura conversas privadas com quem está OFFLINE agora — sem
+        // isso, só quem está conectado neste exato momento aparece na
+        // barra lateral (via _transmitirListaUsuarios acima), e uma
+        // conversa antiga "some" de vista mesmo intacta no banco.
+        try {
+          const conversasPrivadas = await this.mensagemRepo.buscarConversasPrivadas(nome);
+          socket.emit('lista_conversas_privadas', conversasPrivadas);
+        } catch (err) {
+          console.error(`[ServidorCentral] Erro ao carregar conversas privadas de "${nome}":`, err.message);
+        }
+
         // Notifica demais usuários
         socket.broadcast.emit('sistema_mensagem', {
           texto: `${nome} entrou no chat`,
@@ -218,6 +229,16 @@ class ServidorCentral extends Observador {
             pacote.destinatarios
           );
           await this.mensagemRepo.salvarMensagem(pacote.toJSON(), conversaId);
+
+          // Indexa a conversa privada pros dois lados, pra sobreviver a um
+          // login futuro em que o outro participante esteja offline.
+          if (pacote.tipo === 'PRIVADO') {
+            const outro = pacote.destinatarios.find((nome) => nome !== pacote.remetente);
+            if (outro) {
+              await this.mensagemRepo.indexarConversaPrivada(pacote.remetente, outro, conversaId);
+              await this.mensagemRepo.indexarConversaPrivada(outro, pacote.remetente, conversaId);
+            }
+          }
         } catch (err) {
           console.error('[ServidorCentral] Erro ao salvar mensagem:', err.message);
         }
@@ -357,7 +378,7 @@ class ServidorCentral extends Observador {
       });
 
       // Carregar histórico de uma conversa
-      socket.on('carregar_historico', async ({ conversaId, limite }) => {
+      socket.on('carregar_historico', async ({ conversaId, chaveLocal, limite }) => {
         try {
           const nome = this.usuariosConectados.get(socket.id);
           let mensagens = await this.mensagemRepo.buscarMensagens(conversaId, limite || 50);
@@ -377,10 +398,10 @@ class ServidorCentral extends Observador {
               'ENTREGUE'
             ));
 
-          socket.emit('historico_carregado', { conversaId, mensagens });
+          socket.emit('historico_carregado', { conversaId, chaveLocal, mensagens });
         } catch (err) {
           console.error(`[ServidorCentral] Erro ao carregar histórico de "${conversaId}":`, err.message);
-          socket.emit('historico_carregado', { conversaId, mensagens: [] });
+          socket.emit('historico_carregado', { conversaId, chaveLocal, mensagens: [] });
         }
       });
 

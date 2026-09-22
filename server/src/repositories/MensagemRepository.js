@@ -142,6 +142,38 @@ class MensagemRepository {
   }
 
   /**
+   * Indexa uma conversa privada do ponto de vista de UM participante — é
+   * chamado uma vez pra cada lado (remetente e destinatário) a cada
+   * mensagem PRIVADO salva. Upsert: repetir não duplica, só reafirma a
+   * mesma linha. Sem isso, a conversa só aparece na barra lateral de quem
+   * está com o socket aberto no momento — ver buscarConversasPrivadas().
+   * @param {string} username - dono desta entrada do índice
+   * @param {string} outroUsuario - o outro participante da conversa
+   * @param {string} conversaId
+   */
+  async indexarConversaPrivada(username, outroUsuario, conversaId) {
+    const query = `INSERT INTO conversas_privadas_por_usuario (username, conversa_id, outro_usuario) VALUES (?, ?, ?)`;
+    await this.db.execute(query, [username, conversaId, outroUsuario], { prepare: true });
+  }
+
+  /**
+   * Busca os parceiros de conversa privada de um usuário — chamado no
+   * login (registrar_usuario) para restaurar a barra lateral independente
+   * de quem está online naquele momento.
+   * @param {string} username
+   * @returns {Promise<{conversaId: string, outroUsuario: string}[]>}
+   */
+  async buscarConversasPrivadas(username) {
+    const query = `SELECT conversa_id, outro_usuario FROM conversas_privadas_por_usuario WHERE username = ?`;
+    const result = await this.db.execute(query, [username], { prepare: true });
+
+    return result.rows.map((row) => ({
+      conversaId: row.conversa_id,
+      outroUsuario: row.outro_usuario,
+    }));
+  }
+
+  /**
    * Gera um ID canônico para a conversa.
    * Para mensagens privadas, ordena os nomes para que a conversa seja a mesma
    * independente de quem enviou.

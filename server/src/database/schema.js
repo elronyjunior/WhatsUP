@@ -42,6 +42,17 @@ const SCHEMA_QUERIES = [
     grupo_id TEXT,
     PRIMARY KEY (username, grupo_id)
   )`,
+
+  // Índice de conversas privadas por usuário — sem isso, uma conversa com
+  // alguém que está offline no momento do login não aparece na barra lateral
+  // (só usuários conectados chegam via 'lista_usuarios'), mesmo com o
+  // histórico intacto em mensagens_por_conversa.
+  `CREATE TABLE IF NOT EXISTS conversas_privadas_por_usuario (
+    username TEXT,
+    conversa_id TEXT,
+    outro_usuario TEXT,
+    PRIMARY KEY (username, conversa_id)
+  )`,
 ];
 
 /**
