@@ -25,7 +25,11 @@ class MensagemRepository {
       pacote.id,
       pacote.texto,
       pacote.remetente,
-      pacote.destinatarios || [],
+      // Lista vazia (caso do PUBLICO, que sempre manda destinatarios=[])
+      // vira null — Cassandra historicamente rejeita coleção vazia (mas
+      // não-nula) em algumas versões; null é sempre seguro e significa
+      // "sem valor", que é exatamente o caso.
+      pacote.destinatarios && pacote.destinatarios.length > 0 ? pacote.destinatarios : null,
       pacote.tipo,
       pacote.grupoId || null,
       pacote.status || 'ENVIADA',
