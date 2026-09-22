@@ -22,6 +22,8 @@ const SCHEMA_QUERIES = [
     tipo TEXT,
     grupo_id TEXT,
     status TEXT,
+    editada BOOLEAN,
+    apagada BOOLEAN,
     PRIMARY KEY (conversa_id, msg_timestamp, id)
   ) WITH CLUSTERING ORDER BY (msg_timestamp ASC)`,
 
@@ -51,6 +53,9 @@ const SCHEMA_QUERIES = [
 const MIGRACOES = [
   // Padrão State (EstadoMensagem): status de entrega/leitura da mensagem.
   `ALTER TABLE mensagens_por_conversa ADD status TEXT`,
+  // Padrão Command: editar mensagem / apagar para todos (com undo/redo).
+  `ALTER TABLE mensagens_por_conversa ADD editada BOOLEAN`,
+  `ALTER TABLE mensagens_por_conversa ADD apagada BOOLEAN`,
 ];
 
 module.exports = { SCHEMA_QUERIES, MIGRACOES };

@@ -112,6 +112,7 @@
       <span class="pattern-badge observer">🔔 Observer</span>
       <span class="pattern-badge strategy">⚡ Strategy</span>
       <span class="pattern-badge state">🔄 State</span>
+      <span class="pattern-badge command">↺ Command</span>
       <span class="pattern-badge cassandra-badge">🗄️ Cassandra</span>
     </div>
   </div>
@@ -214,6 +215,11 @@
         <span class="pattern-label">Padrão</span>
         <span class="pattern-name state">State</span>
       </div>
+      <div class="pattern-item">
+        <div class="pattern-dot command"></div>
+        <span class="pattern-label">Padrão</span>
+        <span class="pattern-name command">Command</span>
+      </div>
     </div>
 
   </aside>
@@ -234,6 +240,11 @@
           <div class="chat-channel-name" id="header-nome">Canal Geral</div>
           <div class="chat-channel-sub" id="header-sub">ServidorCentral (Observer) — todos os usuários</div>
         </div>
+      </div>
+      <!-- Padrão Command: desfazer/refazer (enviar, editar, apagar para todos) -->
+      <div class="header-acoes-comando">
+        <button id="btn-desfazer" class="btn-comando" title="Desfazer (Ctrl+Z)" aria-label="Desfazer" disabled>↺</button>
+        <button id="btn-refazer" class="btn-comando" title="Refazer (Ctrl+Y)" aria-label="Refazer" disabled>↻</button>
       </div>
       <span id="badge-estrategia" class="badge-estrategia publico">PÚBLICO</span>
     </header>
@@ -357,6 +368,7 @@
 <script src="js/interfaces/EstrategiaEnvio.js"></script>
 <script src="js/interfaces/EstadoPresenca.js"></script>
 <script src="js/interfaces/EstadoMensagem.js"></script>
+<script src="js/interfaces/Comando.js"></script>
 <script src="js/models/Pacote.js"></script>
 <script src="js/strategies/EnvioPublico.js"></script>
 <script src="js/strategies/EnvioPrivado.js"></script>
@@ -367,6 +379,10 @@
 <script src="js/states/EstadoEnviada.js"></script>
 <script src="js/states/EstadoEntregue.js"></script>
 <script src="js/states/EstadoLida.js"></script>
+<script src="js/commands/ComandoEnviarMensagem.js"></script>
+<script src="js/commands/ComandoApagarParaTodos.js"></script>
+<script src="js/commands/ComandoEditarMensagem.js"></script>
+<script src="js/core/HistoricoComandos.js"></script>
 <script src="js/core/CelularUsuario.js"></script>
 <script src="js/app.js"></script>
 

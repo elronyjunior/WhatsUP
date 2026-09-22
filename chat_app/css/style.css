@@ -223,6 +223,7 @@ html, body {
 .pattern-badge.observer { border-color: rgba(124,58,237,0.4); color: var(--color-primary-l); }
 .pattern-badge.strategy { border-color: rgba(6,182,212,0.4); color: var(--color-cyan-l); }
 .pattern-badge.state    { border-color: rgba(245,158,11,0.4); color: var(--color-yellow); }
+.pattern-badge.command  { border-color: rgba(239,68,68,0.4); color: var(--color-red); }
 
 /* ─── CHAT SCREEN ────────────────────────────────────────────────── */
 #chat-screen {
@@ -638,11 +639,13 @@ html, body {
 .pattern-dot.observer { background: var(--color-primary-l); }
 .pattern-dot.strategy { background: var(--color-cyan-l); }
 .pattern-dot.state    { background: var(--color-yellow); }
+.pattern-dot.command  { background: var(--color-red); }
 .pattern-label { color: var(--text-secondary); }
 .pattern-name { font-weight: 600; margin-left: auto; }
 .pattern-name.observer { color: var(--color-primary-l); }
 .pattern-name.strategy { color: var(--color-cyan-l); }
 .pattern-name.state    { color: var(--color-yellow); }
+.pattern-name.command  { color: var(--color-red); }
 
 /* ─── CHAT AREA ──────────────────────────────────────────────────── */
 .chat-area {
@@ -738,6 +741,41 @@ html, body {
   background: rgba(245,158,11,0.15);
   color: var(--color-yellow);
   border: 1px solid rgba(245,158,11,0.3);
+}
+
+/* ─── Padrão Command: desfazer / refazer ─────────────────────────── */
+.header-acoes-comando {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-comando {
+  width: 30px;
+  height: 30px;
+  background: var(--bg-surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.btn-comando:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-active);
+}
+
+.btn-comando:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 /* ─── Botão Voltar (mobile) ──────────────────────────────────────── */
@@ -1223,6 +1261,96 @@ html, body {
 .msg-check { color: var(--text-muted); opacity: 0.85; flex-shrink: 0; }
 .msg-check.msg-check-duplo { margin-left: -3px; } /* os dois checks se sobrepõem um pouco, como no original */
 .msg-check.lida { color: var(--color-cyan-l); opacity: 1; }
+
+/* ─── Padrão Command: editar / apagar para todos ─────────────────── */
+.message-bubble.apagada { background: transparent !important; border-style: dashed !important; }
+.apagada-texto {
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.msg-editada-tag {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Ícones de ação (editar/apagar) — só aparecem ao passar o mouse na mensagem */
+.msg-acoes {
+  position: absolute;
+  top: -12px;
+  right: 8px;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.message-wrapper.minha:hover .msg-acoes {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.msg-acao-btn {
+  width: 22px;
+  height: 22px;
+  background: var(--bg-surface3);
+  border: 1px solid var(--border-active);
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  transition: var(--transition);
+}
+
+.msg-acao-btn:hover { transform: scale(1.12); background: var(--bg-hover); }
+
+/* Caixa de edição inline (substitui .msg-texto enquanto edita) */
+.msg-editar-textarea {
+  width: 100%;
+  min-width: 180px;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  padding: 6px 8px;
+  resize: vertical;
+  outline: none;
+}
+
+.msg-editar-textarea:focus { border-color: var(--color-primary); }
+
+.msg-editar-acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.msg-editar-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.msg-editar-btn.salvar { background: var(--color-green); color: white; }
+.msg-editar-btn.cancelar { background: var(--bg-surface3); color: var(--text-secondary); }
+.msg-editar-btn:hover { transform: scale(1.1); }
 
 /* Mensagem de sistema */
 .sistema-msg {

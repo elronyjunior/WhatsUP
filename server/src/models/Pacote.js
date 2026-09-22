@@ -11,7 +11,9 @@ class Pacote {
     tipo = 'PUBLICO',
     modoExceto = false,
     contextoOrigem = 'geral',  // 'geral', 'grupo_xxx', ou nomeUsuario (privado)
-    status = 'ENVIADA'
+    status = 'ENVIADA',
+    editada = false,
+    apagada = false
   }) {
     this.id = uuidv4();
     this.texto = texto;
@@ -24,6 +26,10 @@ class Pacote {
     // Padrão State (EstadoMensagem) — só é relevante para mensagens PRIVADO;
     // avança ENVIADA → ENTREGUE → LIDA conforme ServidorCentral._avancarEstadoMensagem().
     this.status = status;
+    // Padrão Command — editar/apagar-para-todos com undo/redo (ver
+    // ServidorCentral 'editar_mensagem'/'apagar_mensagem' e MensagemRepository).
+    this.editada = editada;
+    this.apagada = apagada;
   }
 
   toJSON() {
@@ -36,6 +42,8 @@ class Pacote {
       contextoOrigem: this.contextoOrigem,
       timestamp: this.timestamp,
       status: this.status,
+      editada: this.editada,
+      apagada: this.apagada,
     };
   }
 }

@@ -37,6 +37,9 @@ const LIMITE_INATIVIDADE_MS = 3 * 60 * 1000; // 3 min sem interação → Ausent
 let timerInatividade = null;
 let audioCtxNotificacao = null;        // reaproveitado entre os "plins" p/ não recriar o contexto
 
+// ─── Padrão Command: editar / apagar para todos, com desfazer-refazer ────────
+const historicoComandos = new HistoricoComandos();
+
 conversas.set('geral', []);
 
 // ─── Visual Viewport (teclado virtual mobile) ─────────────────────────────────
@@ -430,6 +433,16 @@ function conectar(nome) {
   socket.on('status_mensagem_atualizado', ({ id, status }) => {
     atualizarStatusMensagem(id, status);
   });
+
+  // Padrão Command: alguém (eu mesmo, em outra aba, ou o próprio comando
+  // que acabei de executar) editou ou apagou/restaurou uma mensagem.
+  socket.on('mensagem_editada', ({ id, texto, editada }) => {
+    aplicarAtualizacaoMensagem(id, { texto, editada });
+  });
+
+  socket.on('mensagem_apagada', ({ id, apagada }) => {
+    aplicarAtualizacaoMensagem(id, { apagada });
+  });
 }
 
 /**
@@ -476,6 +489,7 @@ function mostrarChat(nome) {
   setupChatEvents();
   setupModalGrupo();
   setupMenuPresenca();
+  setupComandos();
   iniciarMonitorInatividade();
   solicitarPermissaoNotificacaoSeNecessario();
 
@@ -868,6 +882,17 @@ function adicionarMensagemConversa(pacote) {
       mensagens: [{ id: pacote.id, remetente: pacote.remetente, timestamp: pacote.timestamp }],
     });
   }
+
+  // Padrão Command (ComandoEnviarMensagem/SendMessageCommand): toda mensagem
+  // PRÓPRIA que acabou de ser confirmada pelo servidor entra no histórico de
+  // desfazer — o envio em si já aconteceu (fluxo normal de Observer/
+  // Strategy), então só REGISTRA o comando, sem executá-lo de novo. Isso dá
+  // um "desfazer envio" (Ctrl+Z apaga pra todo mundo) sem precisar de
+  // nenhuma ação extra do usuário além de mandar a mensagem.
+  if (pacote.remetente === meuNome && !pacote.apagada) {
+    historicoComandos.registrar(new ComandoEnviarMensagem(pacote, chave, enviarComandoApagar));
+    atualizarBotoesDesfazerRefazer();
+  }
 }
 
 // ─── Renderização do Sidebar ──────────────────────────────────────────────────
@@ -1198,24 +1223,7 @@ function renderizarMensagem(pacote) {
 
     bubble.dataset.id = pacote.id;
 
-    bubble.innerHTML = `
-      <div class="message-bubble ${pacote.tipo.toLowerCase()} ${isMeu ? 'meu' : ''}">
-        ${
-          !isMeu
-            ? `<div class="msg-remetente">${escapeHtml(pacote.remetente)}</div>`
-            : ''
-        }
-
-        <div class="msg-texto">
-          ${formatarTexto(pacote.texto)}
-        </div>
-
-        <div class="msg-meta">
-          <span class="msg-hora">${hora}</span>
-          ${isMeu ? renderizarCheckMensagem(pacote) : ''}
-        </div>
-      </div>
-    `;
+    bubble.innerHTML = montarConteudoBolha(pacote, isMeu, hora);
   }
 
   bubble.style.opacity = '0';
@@ -1233,6 +1241,52 @@ function renderizarMensagem(pacote) {
 
   container.scrollTop =
     container.scrollHeight;
+}
+
+/**
+ * Monta o HTML de dentro de uma bolha de mensagem (tudo que fica dentro de
+ * .message-bubble). Extraído de renderizarMensagem() pra poder ser
+ * reaproveitado por aplicarAtualizacaoMensagem() — quando uma mensagem é
+ * editada ou apagada/restaurada, a bolha já existente na tela é atualizada
+ * no lugar (sem mudar de posição na lista), em vez de recriada do zero.
+ */
+function montarConteudoBolha(pacote, isMeu, hora) {
+  // Padrão Command: mensagem apagada para todos vira um placeholder — o
+  // texto original nunca é destruído no banco (só escondido), então
+  // desfazer (restaurar) volta a mostrar o conteúdo normalmente.
+  if (pacote.apagada) {
+    return `
+      <div class="message-bubble ${pacote.tipo.toLowerCase()} ${isMeu ? 'meu' : ''} apagada">
+        <div class="msg-texto apagada-texto">🚫 Mensagem apagada</div>
+        <div class="msg-meta">
+          <span class="msg-hora">${hora}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="message-bubble ${pacote.tipo.toLowerCase()} ${isMeu ? 'meu' : ''}">
+      ${!isMeu ? `<div class="msg-remetente">${escapeHtml(pacote.remetente)}</div>` : ''}
+
+      <div class="msg-texto">
+        ${formatarTexto(pacote.texto)}
+      </div>
+
+      <div class="msg-meta">
+        ${pacote.editada ? '<span class="msg-editada-tag">editada</span>' : ''}
+        <span class="msg-hora">${hora}</span>
+        ${isMeu ? renderizarCheckMensagem(pacote) : ''}
+      </div>
+
+      ${isMeu ? `
+        <div class="msg-acoes">
+          <button class="msg-acao-btn" onclick="iniciarEdicaoMensagem('${pacote.id}')" title="Editar mensagem" aria-label="Editar mensagem">✏️</button>
+          <button class="msg-acao-btn" onclick="apagarMensagemParaTodos('${pacote.id}')" title="Apagar para todos" aria-label="Apagar para todos">🗑️</button>
+        </div>
+      ` : ''}
+    </div>
+  `;
 }
 
 // ─── Modal: Criar Grupo ───────────────────────────────────────────────────────
@@ -1635,6 +1689,168 @@ function atualizarStatusMensagem(id, status) {
   if (checkAntigo) {
     checkAntigo.outerHTML = renderizarCheckMensagem(pacoteAtualizado);
   }
+}
+
+// ─── Padrão Command: Editar / Apagar para Todos (com desfazer-refazer) ────────
+
+/** Procura uma mensagem pelo ID em todas as conversas carregadas */
+function encontrarMensagemPorId(id) {
+  for (const msgs of conversas.values()) {
+    const alvo = msgs.find((m) => m.id === id);
+    if (alvo) return alvo;
+  }
+  return null;
+}
+
+/**
+ * Aplica uma mudança de conteúdo (texto/editada/apagada) numa mensagem:
+ * atualiza o objeto em memória (pra sobreviver a re-renderizações futuras)
+ * e, se a bolha estiver na tela agora, refaz o conteúdo dela no lugar —
+ * sem mudar a posição da mensagem na lista.
+ */
+function aplicarAtualizacaoMensagem(id, mudancas) {
+  const pacote = encontrarMensagemPorId(id);
+  if (!pacote) return;
+  Object.assign(pacote, mudancas);
+
+  const wrapper = document.querySelector(`.message-wrapper[data-id="${id}"]`);
+  const bubbleAntiga = wrapper?.querySelector('.message-bubble');
+  if (!bubbleAntiga) return;
+
+  const meuNome = celularUsuario?.nome;
+  const isMeu = pacote.remetente === meuNome;
+  const hora = formatarHora(pacote.timestamp);
+  bubbleAntiga.outerHTML = montarConteudoBolha(pacote, isMeu, hora);
+}
+
+/**
+ * Efetivamente pede ao servidor pra apagar/restaurar uma mensagem "para
+ * todos" e já atualiza a tela de forma otimista. Usado tanto por
+ * ComandoApagarParaTodos (🗑️ numa mensagem qualquer) quanto por
+ * ComandoEnviarMensagem (desfazer o envio = apagar; refazer = restaurar).
+ */
+function enviarComandoApagar(pacote, chaveConversa, apagada) {
+  const conversaId = gerarConversaIdParaHistorico(chaveConversa);
+  socket.emit('apagar_mensagem', { id: pacote.id, conversaId, timestamp: pacote.timestamp, apagada });
+  aplicarAtualizacaoMensagem(pacote.id, { apagada });
+}
+
+/** Efetivamente pede ao servidor pra editar o texto de uma mensagem própria */
+function enviarComandoEditar(pacote, chaveConversa, novoTexto) {
+  const conversaId = gerarConversaIdParaHistorico(chaveConversa);
+  socket.emit('editar_mensagem', { id: pacote.id, conversaId, timestamp: pacote.timestamp, novoTexto });
+  aplicarAtualizacaoMensagem(pacote.id, { texto: novoTexto, editada: true });
+}
+
+/** Clique no 🗑️ de uma mensagem própria — dispara o ComandoApagarParaTodos */
+function apagarMensagemParaTodos(id) {
+  const pacote = encontrarMensagemPorId(id);
+  if (!pacote || !celularUsuario || pacote.remetente !== celularUsuario.nome || pacote.apagada) return;
+
+  historicoComandos.executar(new ComandoApagarParaTodos(pacote, conversaAtiva, enviarComandoApagar));
+  atualizarBotoesDesfazerRefazer();
+  mostrarToast('🗑️ Mensagem apagada para todos', 'info');
+}
+
+/** Clique no ✏️ de uma mensagem própria — troca o texto por uma caixa de edição inline */
+function iniciarEdicaoMensagem(id) {
+  const pacote = encontrarMensagemPorId(id);
+  if (!pacote || !celularUsuario || pacote.remetente !== celularUsuario.nome || pacote.apagada) return;
+
+  const wrapper = document.querySelector(`.message-wrapper[data-id="${id}"]`);
+  const areaTexto = wrapper?.querySelector('.msg-texto');
+  if (!areaTexto) return;
+
+  const textoOriginal = pacote.texto;
+
+  areaTexto.innerHTML = `
+    <textarea class="msg-editar-textarea">${escapeHtml(textoOriginal)}</textarea>
+    <div class="msg-editar-acoes">
+      <button class="msg-editar-btn cancelar" type="button" title="Cancelar" aria-label="Cancelar edição">✕</button>
+      <button class="msg-editar-btn salvar" type="button" title="Salvar (Enter)" aria-label="Salvar edição">✓</button>
+    </div>
+  `;
+
+  const textarea = areaTexto.querySelector('textarea');
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+  // Mais simples e seguro que reverter só essa bolha na mão: re-renderiza
+  // a conversa inteira a partir do que já está em memória (não mexe no servidor).
+  const cancelar = () => renderizarMensagensAtuais();
+
+  const salvar = () => {
+    const novoTexto = textarea.value.trim();
+    if (!novoTexto || novoTexto === textoOriginal) {
+      cancelar();
+      return;
+    }
+    historicoComandos.executar(
+      new ComandoEditarMensagem(pacote, conversaAtiva, novoTexto, enviarComandoEditar)
+    );
+    atualizarBotoesDesfazerRefazer();
+  };
+
+  areaTexto.querySelector('.msg-editar-btn.cancelar').addEventListener('click', cancelar);
+  areaTexto.querySelector('.msg-editar-btn.salvar').addEventListener('click', salvar);
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      salvar();
+    } else if (e.key === 'Escape') {
+      cancelar();
+    }
+  });
+}
+
+/** Desfaz o último comando (envio/edição/exclusão) do histórico, se houver */
+function desfazerUltimoComando() {
+  const comando = historicoComandos.desfazer();
+  if (comando) mostrarToast(`↺ Desfeito: ${comando.rotulo}`, 'info');
+  atualizarBotoesDesfazerRefazer();
+}
+
+/** Refaz o último comando desfeito, se houver */
+function refazerUltimoComando() {
+  const comando = historicoComandos.refazer();
+  if (comando) mostrarToast(`↻ Refeito: ${comando.rotulo}`, 'info');
+  atualizarBotoesDesfazerRefazer();
+}
+
+/** Habilita/desabilita os botões de desfazer/refazer conforme o histórico */
+function atualizarBotoesDesfazerRefazer() {
+  const btnDesfazer = document.getElementById('btn-desfazer');
+  const btnRefazer = document.getElementById('btn-refazer');
+  if (btnDesfazer) btnDesfazer.disabled = !historicoComandos.podeDesfazer;
+  if (btnRefazer) btnRefazer.disabled = !historicoComandos.podeRefazer;
+}
+
+/** Liga os botões de desfazer/refazer e os atalhos de teclado Ctrl+Z / Ctrl+Y */
+function setupComandos() {
+  const btnDesfazer = document.getElementById('btn-desfazer');
+  const btnRefazer = document.getElementById('btn-refazer');
+
+  btnDesfazer?.addEventListener('click', desfazerUltimoComando);
+  btnRefazer?.addEventListener('click', refazerUltimoComando);
+  atualizarBotoesDesfazerRefazer();
+
+  document.addEventListener('keydown', (e) => {
+    // Não rouba Ctrl+Z/Y de dentro de um campo de texto (ex.: o próprio
+    // textarea de edição, ou o campo de mensagem) — lá vale o undo nativo.
+    const emCampoDeTexto = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
+    if (emCampoDeTexto) return;
+
+    const ctrlOuCmd = e.ctrlKey || e.metaKey;
+    if (!ctrlOuCmd) return;
+
+    if (!e.shiftKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      desfazerUltimoComando();
+    } else if (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z')) {
+      e.preventDefault();
+      refazerUltimoComando();
+    }
+  });
 }
 
 // ─── Mensagem do Sistema ──────────────────────────────────────────────────────

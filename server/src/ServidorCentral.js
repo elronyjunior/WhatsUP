@@ -136,6 +136,58 @@ class ServidorCentral extends Observador {
       });
 
       /**
+       * Padrão Command (ComandoEditarMensagem): aplica o "executar()" (novo
+       * texto) ou o "desfazer()" (texto anterior, mandado pelo próprio
+       * comando no cliente) — dos dois lados é a mesma operação no banco.
+       * Nunca confia no campo remetente vindo do cliente: busca a mensagem
+       * de verdade e só aceita se quem está pedindo é o dono dela.
+       */
+      socket.on('editar_mensagem', async ({ id, conversaId, timestamp, novoTexto }) => {
+        try {
+          const nome = this.usuariosConectados.get(socket.id);
+          if (!nome || !id || !conversaId || !timestamp || typeof novoTexto !== 'string' || !novoTexto.trim()) return;
+
+          const mensagem = await this.mensagemRepo.buscarMensagemPorId(conversaId, timestamp, id);
+          if (!mensagem || mensagem.remetente !== nome) {
+            console.warn(`[ServidorCentral] "${nome}" tentou editar uma mensagem que não é dele (ou que não existe): "${id}"`);
+            return;
+          }
+          if (mensagem.apagada) return; // não edita mensagem já apagada para todos
+
+          await this.mensagemRepo.editarMensagem(conversaId, timestamp, id, novoTexto);
+          console.log(`✏️ [ServidorCentral] "${nome}" editou a mensagem "${id}"`);
+          this._transmitirEdicaoOuExclusao(mensagem, 'mensagem_editada', { id, texto: novoTexto, editada: true });
+        } catch (err) {
+          console.error('[ServidorCentral] Erro ao editar mensagem:', err.message);
+        }
+      });
+
+      /**
+       * Padrão Command (ComandoApagarParaTodos / ComandoEnviarMensagem): liga
+       * ou desliga a marca de apagada. O texto original nunca é destruído —
+       * é por isso que desfazer uma exclusão (ou desfazer o próprio envio,
+       * via ComandoEnviarMensagem) é só chamar isso de novo com apagada=false.
+       */
+      socket.on('apagar_mensagem', async ({ id, conversaId, timestamp, apagada = true }) => {
+        try {
+          const nome = this.usuariosConectados.get(socket.id);
+          if (!nome || !id || !conversaId || !timestamp) return;
+
+          const mensagem = await this.mensagemRepo.buscarMensagemPorId(conversaId, timestamp, id);
+          if (!mensagem || mensagem.remetente !== nome) {
+            console.warn(`[ServidorCentral] "${nome}" tentou apagar uma mensagem que não é dele (ou que não existe): "${id}"`);
+            return;
+          }
+
+          await this.mensagemRepo.definirApagada(conversaId, timestamp, id, apagada);
+          console.log(`${apagada ? '🗑️' : '♻️'} [ServidorCentral] "${nome}" ${apagada ? 'apagou' : 'restaurou'} a mensagem "${id}" para todos`);
+          this._transmitirEdicaoOuExclusao(mensagem, 'mensagem_apagada', { id, apagada });
+        } catch (err) {
+          console.error('[ServidorCentral] Erro ao apagar/restaurar mensagem:', err.message);
+        }
+      });
+
+      /**
        * Evento principal: CelularUsuario chama notificarServidor(pacote)
        */
       socket.on('notificar_servidor', async (dadosPacote) => {
@@ -486,6 +538,29 @@ class ServidorCentral extends Observador {
       if (nomeConectado === nome) return socketId;
     }
     return null;
+  }
+
+  /**
+   * Padrão Command: avisa quem já podia ver a mensagem original — exatamente
+   * a mesma audiência de quando ela foi enviada — que ela mudou (editada
+   * ou apagada/restaurada). PUBLICO vai pra todo mundo conectado; qualquer
+   * outro tipo vai só pro remetente + destinatarios guardados na própria
+   * mensagem. Quem estiver offline recebe a versão corrigida naturalmente
+   * na próxima vez que carregar o histórico, já que o banco é a fonte real.
+   * @param {Object} mensagem - retorno de buscarMensagemPorId()
+   * @param {string} evento - 'mensagem_editada' | 'mensagem_apagada'
+   * @param {Object} payload
+   */
+  _transmitirEdicaoOuExclusao(mensagem, evento, payload) {
+    if (mensagem.tipo === 'PUBLICO') {
+      this.io.emit(evento, payload);
+      return;
+    }
+    const audiencia = new Set([mensagem.remetente, ...(mensagem.destinatarios || [])]);
+    audiencia.forEach((nome) => {
+      const socketId = this._socketIdDoUsuario(nome);
+      if (socketId) this.io.to(socketId).emit(evento, payload);
+    });
   }
 
   /**
