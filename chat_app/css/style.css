@@ -578,6 +578,7 @@ html, body {
 }
 
 .conv-preview-vazio { color: var(--text-muted); font-style: italic; }
+.conv-preview-apagada { color: var(--text-muted); font-style: italic; }
 
 /* Badge de Não Lidas */
 .conv-badge {

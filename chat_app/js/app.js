@@ -964,9 +964,7 @@ function renderizarConversas() {
                   geralUltima.remetente === meuNome
                     ? 'Você'
                     : geralUltima.remetente
-                }:</span> ${escapeHtml(geralUltima.texto).slice(0, 35)}${
-                  geralUltima.texto.length > 35 ? '…' : ''
-                }`
+                }:</span> ${previewTexto(geralUltima)}`
               : '<span class="conv-preview-vazio">Sem mensagens ainda</span>'
           }
         </div>
@@ -1018,9 +1016,7 @@ function renderizarConversas() {
                         ultima.remetente === meuNome
                           ? 'Você'
                           : ultima.remetente
-                      }:</span> ${escapeHtml(ultima.texto).slice(0, 35)}${
-                        ultima.texto.length > 35 ? '…' : ''
-                      }`
+                      }:</span> ${previewTexto(ultima)}`
                     : `<span class="conv-preview-vazio">${g.membros.length} membros</span>`
                 }
               </div>
@@ -1081,9 +1077,7 @@ function renderizarConversas() {
                       ultima.remetente === meuNome
                         ? 'Você'
                         : ultima.remetente
-                    }:</span> ${escapeHtml(ultima.texto).slice(0, 35)}${
-                      ultima.texto.length > 35 ? '…' : ''
-                    }`
+                    }:</span> ${previewTexto(ultima)}`
                   : '<span class="conv-preview-vazio">Iniciar conversa...</span>'
               }
             </div>
@@ -1244,6 +1238,20 @@ function renderizarMensagem(pacote) {
 }
 
 /**
+ * Texto de preview (prévia da conversa na sidebar) de uma mensagem — usado
+ * depois do "Você:"/"Fulano:" em cada item da lista. Se ela foi apagada
+ * para todos, mostra o aviso no lugar do conteúdo real (o texto original
+ * continua intacto no objeto e no banco, só não é exibido enquanto
+ * apagada=true — é por isso que desfazer a exclusão volta a mostrá-lo).
+ */
+function previewTexto(pacote) {
+  if (pacote.apagada) {
+    return `<span class="conv-preview-apagada">🚫 Mensagem apagada</span>`;
+  }
+  return `${escapeHtml(pacote.texto).slice(0, 35)}${pacote.texto.length > 35 ? '…' : ''}`;
+}
+
+/**
  * Monta o HTML de dentro de uma bolha de mensagem (tudo que fica dentro de
  * .message-bubble). Extraído de renderizarMensagem() pra poder ser
  * reaproveitado por aplicarAtualizacaoMensagem() — quando uma mensagem é
@@ -1253,10 +1261,12 @@ function renderizarMensagem(pacote) {
 function montarConteudoBolha(pacote, isMeu, hora) {
   // Padrão Command: mensagem apagada para todos vira um placeholder — o
   // texto original nunca é destruído no banco (só escondido), então
-  // desfazer (restaurar) volta a mostrar o conteúdo normalmente.
+  // desfazer (restaurar) volta a mostrar o conteúdo normalmente. Mantém o
+  // nome de quem mandou (igual a uma mensagem normal), só troca o corpo.
   if (pacote.apagada) {
     return `
       <div class="message-bubble ${pacote.tipo.toLowerCase()} ${isMeu ? 'meu' : ''} apagada">
+        ${!isMeu ? `<div class="msg-remetente">${escapeHtml(pacote.remetente)}</div>` : ''}
         <div class="msg-texto apagada-texto">🚫 Mensagem apagada</div>
         <div class="msg-meta">
           <span class="msg-hora">${hora}</span>
@@ -1713,14 +1723,19 @@ function aplicarAtualizacaoMensagem(id, mudancas) {
   if (!pacote) return;
   Object.assign(pacote, mudancas);
 
+  // A bolha só existe na tela se essa conversa estiver aberta agora — mas a
+  // prévia na sidebar (nome + última mensagem) precisa refletir a mudança
+  // de qualquer forma, então renderizarConversas() roda sempre.
   const wrapper = document.querySelector(`.message-wrapper[data-id="${id}"]`);
   const bubbleAntiga = wrapper?.querySelector('.message-bubble');
-  if (!bubbleAntiga) return;
+  if (bubbleAntiga) {
+    const meuNome = celularUsuario?.nome;
+    const isMeu = pacote.remetente === meuNome;
+    const hora = formatarHora(pacote.timestamp);
+    bubbleAntiga.outerHTML = montarConteudoBolha(pacote, isMeu, hora);
+  }
 
-  const meuNome = celularUsuario?.nome;
-  const isMeu = pacote.remetente === meuNome;
-  const hora = formatarHora(pacote.timestamp);
-  bubbleAntiga.outerHTML = montarConteudoBolha(pacote, isMeu, hora);
+  renderizarConversas();
 }
 
 /**
