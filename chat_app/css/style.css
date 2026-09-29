@@ -15,6 +15,7 @@
   --color-green:     #10B981;
   --color-red:       #EF4444;
   --color-yellow:    #F59E0B;
+  --color-orange:    #F97316;
 
   --text-primary:  #E6EDF3;
   --text-secondary:#8B949E;
@@ -224,6 +225,8 @@ html, body {
 .pattern-badge.strategy { border-color: rgba(6,182,212,0.4); color: var(--color-cyan-l); }
 .pattern-badge.state    { border-color: rgba(245,158,11,0.4); color: var(--color-yellow); }
 .pattern-badge.command  { border-color: rgba(239,68,68,0.4); color: var(--color-red); }
+.pattern-badge.visitor  { border-color: rgba(16,185,129,0.4); color: var(--color-green); }
+.pattern-badge.iterator { border-color: rgba(249,115,22,0.4); color: var(--color-orange); }
 
 /* ─── CHAT SCREEN ────────────────────────────────────────────────── */
 #chat-screen {
@@ -641,12 +644,16 @@ html, body {
 .pattern-dot.strategy { background: var(--color-cyan-l); }
 .pattern-dot.state    { background: var(--color-yellow); }
 .pattern-dot.command  { background: var(--color-red); }
+.pattern-dot.visitor  { background: var(--color-green); }
+.pattern-dot.iterator { background: var(--color-orange); }
 .pattern-label { color: var(--text-secondary); }
 .pattern-name { font-weight: 600; margin-left: auto; }
 .pattern-name.observer { color: var(--color-primary-l); }
 .pattern-name.strategy { color: var(--color-cyan-l); }
 .pattern-name.state    { color: var(--color-yellow); }
 .pattern-name.command  { color: var(--color-red); }
+.pattern-name.visitor  { color: var(--color-green); }
+.pattern-name.iterator { color: var(--color-orange); }
 
 /* ─── CHAT AREA ──────────────────────────────────────────────────── */
 .chat-area {
@@ -1885,4 +1892,322 @@ html, body {
 .toast.sucesso {
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.95), rgba(5, 150, 105, 0.95));
   color: white;
+}
+
+/* ─── Header: ações (busca, galeria, ver dados) ──────────────────── */
+.chat-header-actions { display: flex; align-items: center; gap: 6px; }
+
+.btn-header-acao {
+  width: 34px;
+  height: 34px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.btn-header-acao:hover {
+  background: var(--bg-surface2);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.btn-header-acao.hidden { display: none; }
+
+/* ─── Padrão Iterator: barra de busca no histórico ───────────────── */
+.barra-busca {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--bg-surface2);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.barra-busca.hidden { display: none; }
+
+.barra-busca input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.barra-busca input::placeholder { color: var(--text-muted); }
+
+.busca-contador {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 40px;
+  text-align: center;
+}
+
+.btn-busca-nav {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-busca-nav:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Mensagem em destaque enquanto é o resultado atual da busca */
+.message-wrapper.busca-destaque .message-bubble {
+  outline: 2px solid var(--color-orange);
+  outline-offset: 2px;
+}
+
+/* ─── Upload de fotos: prévia antes de enviar ────────────────────── */
+.preview-midia {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--bg-surface2);
+  border-top: 1px solid var(--border);
+}
+
+.preview-midia.hidden { display: none; }
+
+.preview-midia img {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.preview-midia-nome {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.preview-midia-cancelar {
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+}
+
+.preview-midia-cancelar:hover { background: var(--bg-hover); color: var(--color-red); }
+
+/* ─── Foto dentro da bolha de mensagem ────────────────────────────── */
+.msg-midia {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  object-fit: cover;
+}
+
+.message-bubble.com-midia { padding: 6px; }
+.message-bubble.com-midia .msg-texto { padding: 6px 8px 0; }
+.message-bubble.com-midia .msg-meta { padding: 0 8px 4px; }
+
+/* ─── Padrão Iterator: modal de Galeria de Mídia (MediaIterator) ─── */
+/* .galeria-overlay reaproveita .modal-overlay (mesmo elemento tem as duas
+   classes) — só .galeria-card tem layout próprio, mais largo pra imagem. */
+.galeria-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius-lg);
+  width: min(720px, 92vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: scale(0.96);
+  transition: transform 0.2s ease;
+}
+
+.galeria-overlay.aberto .galeria-card { transform: scale(1); }
+
+.galeria-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.galeria-contador { font-size: 13px; color: var(--text-secondary); font-weight: 600; }
+
+.galeria-corpo {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  min-height: 300px;
+  background: var(--bg-base);
+}
+
+.galeria-imagem-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+}
+
+.galeria-imagem-wrap img {
+  max-width: 100%;
+  max-height: 60vh;
+  border-radius: var(--radius-md);
+  object-fit: contain;
+}
+
+.galeria-imagem-wrap img.hidden { display: none; }
+
+.galeria-vazio {
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.galeria-vazio.hidden { display: none; }
+
+.galeria-nav-btn {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  background: var(--bg-surface2);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.galeria-nav-btn:hover:not(:disabled) { background: var(--bg-hover); }
+.galeria-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.galeria-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.galeria-remetente { font-weight: 600; color: var(--text-primary); }
+
+/* ─── Padrão Visitor: modal "Ver dados" (estatísticas) ───────────── */
+.estatisticas-carregando {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 24px 0;
+}
+
+.stat-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: var(--bg-surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.stat-card-numero { font-size: 20px; font-weight: 700; color: var(--color-green); }
+.stat-card-label { font-size: 11px; color: var(--text-secondary); text-align: center; }
+
+.stat-secao-titulo {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 18px 0 10px;
+}
+
+.stat-ranking { display: flex; flex-direction: column; gap: 10px; }
+
+.stat-ranking-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stat-ranking-nome {
+  width: 90px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.stat-ranking-barra-fundo {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-surface3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.stat-ranking-barra {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-green), var(--color-cyan));
+  border-radius: 4px;
+}
+
+.stat-ranking-total {
+  width: 28px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.stat-vazio {
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 12px 0;
+}
+
+@media (max-width: 480px) {
+  .galeria-card { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; }
+  .galeria-nav-btn { width: 34px; height: 34px; }
+  .stat-ranking-nome { width: 70px; }
 }

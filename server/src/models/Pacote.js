@@ -13,7 +13,8 @@ class Pacote {
     contextoOrigem = 'geral',  // 'geral', 'grupo_xxx', ou nomeUsuario (privado)
     status = 'ENVIADA',
     editada = false,
-    apagada = false
+    apagada = false,
+    midia = null
   }) {
     this.id = uuidv4();
     this.texto = texto;
@@ -30,6 +31,9 @@ class Pacote {
     // ServidorCentral 'editar_mensagem'/'apagar_mensagem' e MensagemRepository).
     this.editada = editada;
     this.apagada = apagada;
+    // Upload de fotos (pré-requisito do Padrão Iterator — MediaIterator):
+    // null para mensagem só-texto, ou { url, nomeArquivo } quando tem foto anexada.
+    this.midia = midia;
   }
 
   toJSON() {
@@ -44,6 +48,7 @@ class Pacote {
       status: this.status,
       editada: this.editada,
       apagada: this.apagada,
+      midia: this.midia,
     };
   }
 }

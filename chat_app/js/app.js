@@ -40,6 +40,11 @@ let audioCtxNotificacao = null;        // reaproveitado entre os "plins" p/ não
 // ─── Padrão Command: editar / apagar para todos, com desfazer-refazer ────────
 const historicoComandos = new HistoricoComandos();
 
+// ─── Upload de fotos + Padrão Iterator (galeria de mídia / busca) ────────────
+let arquivoFotoSelecionado = null; // File aguardando envio (após seleção, antes de mandar)
+let mediaIteratorAtual = null;
+let searchIteratorAtual = null;
+
 conversas.set('geral', []);
 
 // ─── Visual Viewport (teclado virtual mobile) ─────────────────────────────────
@@ -452,6 +457,13 @@ function conectar(nome) {
     atualizarStatusMensagem(id, status);
   });
 
+  // Diagnóstico: o banco recusou salvar ou carregar algo — sem isso o erro
+  // só existia no console do servidor, invisível pra quem está testando.
+  socket.on('erro_persistencia', ({ contexto, mensagem }) => {
+    console.error(`[Persistência] Falha (${contexto}):`, mensagem);
+    mostrarToast(`⚠️ Erro ao salvar/carregar no banco: ${mensagem}`, 'erro');
+  });
+
   // Padrão Command: alguém (eu mesmo, em outra aba, ou o próprio comando
   // que acabei de executar) editou ou apagou/restaurou uma mensagem.
   socket.on('mensagem_editada', ({ id, texto, editada }) => {
@@ -460,6 +472,11 @@ function conectar(nome) {
 
   socket.on('mensagem_apagada', ({ id, apagada }) => {
     aplicarAtualizacaoMensagem(id, { apagada });
+  });
+
+  // Padrão Visitor: resultado das estatísticas do "Ver dados" (Canal Geral/Grupo)
+  socket.on('estatisticas_carregadas', ({ dados }) => {
+    renderizarEstatisticas(dados);
   });
 }
 
@@ -555,6 +572,10 @@ function setupChatEvents() {
   });
 
   setupPainelSecreto();
+  setupUploadFoto();
+  setupGaleriaMidia();
+  setupBuscaChat();
+  setupEstatisticas();
 
   msgInput.focus();
 }
@@ -719,14 +740,17 @@ function carregarHistorico(chaveLocal) {
 }
 
 // ─── Envio de Mensagem ────────────────────────────────────────────────────────
-function enviarMensagem() {
+async function enviarMensagem() {
   const input = document.getElementById('msg-input');
   const texto = input.value.trim();
+  const arquivo = arquivoFotoSelecionado;
 
-  if (!texto || !celularUsuario) return;
+  if ((!texto && !arquivo) || !celularUsuario) return;
 
   // ── Modo Mensagem Secreta (painel aberto) ─────────────────────────
+  // Upload de foto não é suportado em mensagem secreta por ora — precisa de texto.
   if (painelSegretoAberto) {
+    if (!texto) return;
     const destinatarios = Array.from(usuariosSelecionadosSecreto);
 
     // Validação: sem EXCETO, precisa de ao menos 1 selecionado
@@ -761,13 +785,22 @@ function enviarMensagem() {
   }
 
   // ── Envio normal ──────────────────────────────────────────────────
+  const btnEnviar = document.getElementById('btn-enviar');
   try {
+    // Upload de fotos (pré-requisito do Padrão Iterator — MediaIterator):
+    // manda o arquivo primeiro via HTTP, só o texto+URL viajam pelo socket.
+    let midia = null;
+    if (arquivo) {
+      btnEnviar.disabled = true;
+      midia = await enviarArquivoParaServidor(arquivo);
+    }
+
     if (conversaAtiva === 'geral') {
       celularUsuario.mudarEstrategia(
         new EnvioPublico(celularUsuario.nome)
       );
 
-      celularUsuario.escreverMensagem(texto, [], 'geral');
+      celularUsuario.escreverMensagem(texto, [], 'geral', midia);
     } else if (grupos.has(conversaAtiva)) {
       socket.emit('mensagem_grupo', {
         grupoId: conversaAtiva,
@@ -778,20 +811,24 @@ function enviarMensagem() {
         contextoOrigem: conversaAtiva,
         timestamp: new Date().toISOString(),
         id: `msg_${Date.now()}`,
+        midia,
       });
     } else {
       celularUsuario.mudarEstrategia(
         new EnvioPrivado(celularUsuario.nome)
       );
 
-      celularUsuario.escreverMensagem(texto, [conversaAtiva], conversaAtiva);
+      celularUsuario.escreverMensagem(texto, [conversaAtiva], conversaAtiva, midia);
     }
 
     input.value = '';
     input.style.height = 'auto';
+    cancelarMidiaSelecionada();
     input.focus();
   } catch (err) {
     mostrarToast(err.message, 'erro');
+  } finally {
+    btnEnviar.disabled = false;
   }
 }
 
@@ -1145,6 +1182,10 @@ function atualizarHeader(id) {
   const subEl = document.getElementById('header-sub');
   const badgeEl = document.getElementById('badge-estrategia');
 
+  // Padrão Visitor ("Ver dados"): só faz sentido pra Canal Geral e Grupos —
+  // como no WhatsApp, uma conversa privada 1-para-1 não tem essa tela.
+  document.getElementById('btn-ver-dados').classList.toggle('hidden', !(id === 'geral' || grupos.has(id)));
+
   if (id === 'geral') {
     iconEl.textContent = '🌐';
     iconEl.className = 'chat-channel-icon geral';
@@ -1265,6 +1306,10 @@ function previewTexto(pacote) {
   if (pacote.apagada) {
     return `<span class="conv-preview-apagada">🚫 Mensagem apagada</span>`;
   }
+  if (pacote.midia) {
+    const legenda = pacote.texto ? ` ${escapeHtml(pacote.texto).slice(0, 25)}` : '';
+    return `📷 Foto${legenda}`;
+  }
   return `${escapeHtml(pacote.texto).slice(0, 35)}${pacote.texto.length > 35 ? '…' : ''}`;
 }
 
@@ -1293,12 +1338,18 @@ function montarConteudoBolha(pacote, isMeu, hora) {
   }
 
   return `
-    <div class="message-bubble ${pacote.tipo.toLowerCase()} ${isMeu ? 'meu' : ''}">
+    <div class="message-bubble ${pacote.tipo.toLowerCase()} ${isMeu ? 'meu' : ''} ${pacote.midia ? 'com-midia' : ''}">
       ${!isMeu ? `<div class="msg-remetente">${escapeHtml(pacote.remetente)}</div>` : ''}
 
-      <div class="msg-texto">
-        ${formatarTexto(pacote.texto)}
-      </div>
+      ${pacote.midia ? `
+        <img class="msg-midia" src="${escapeHtml(pacote.midia.url)}" alt="${escapeHtml(pacote.midia.nomeArquivo || 'Foto enviada')}" onclick="abrirGaleriaEm('${pacote.id}')" />
+      ` : ''}
+
+      ${pacote.texto ? `
+        <div class="msg-texto">
+          ${formatarTexto(pacote.texto)}
+        </div>
+      ` : ''}
 
       <div class="msg-meta">
         ${pacote.editada ? '<span class="msg-editada-tag">editada</span>' : ''}
@@ -1863,6 +1914,292 @@ function mostrarToast(msg, tipo = 'info') {
     () => toast.classList.remove('show'),
     3500
   );
+}
+
+// ─── Upload de Fotos (pré-requisito do Padrão Iterator) ──────────────────────
+function setupUploadFoto() {
+  const btnAnexar = document.getElementById('btn-anexar-foto');
+  const inputArquivo = document.getElementById('input-arquivo-foto');
+  const btnCancelar = document.getElementById('btn-cancelar-midia');
+
+  btnAnexar.addEventListener('click', () => inputArquivo.click());
+
+  inputArquivo.addEventListener('change', () => {
+    const arquivo = inputArquivo.files[0];
+    if (!arquivo) return;
+
+    if (arquivo.size > 8 * 1024 * 1024) {
+      mostrarToast('⚠️ Foto muito grande (máx. 8MB)', 'erro');
+      inputArquivo.value = '';
+      return;
+    }
+
+    arquivoFotoSelecionado = arquivo;
+    mostrarPreviewMidia(arquivo);
+  });
+
+  btnCancelar.addEventListener('click', cancelarMidiaSelecionada);
+}
+
+function mostrarPreviewMidia(arquivo) {
+  const preview = document.getElementById('preview-midia');
+  const img = document.getElementById('preview-midia-img');
+  const nome = document.getElementById('preview-midia-nome');
+
+  img.src = URL.createObjectURL(arquivo);
+  nome.textContent = arquivo.name;
+  preview.classList.remove('hidden');
+}
+
+function cancelarMidiaSelecionada() {
+  arquivoFotoSelecionado = null;
+  document.getElementById('input-arquivo-foto').value = '';
+
+  const img = document.getElementById('preview-midia-img');
+  if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+  img.src = '';
+
+  document.getElementById('preview-midia').classList.add('hidden');
+}
+
+/** Envia o arquivo selecionado pro servidor via HTTP — só a URL devolvida viaja pelo socket. */
+async function enviarArquivoParaServidor(arquivo) {
+  const formData = new FormData();
+  formData.append('arquivo', arquivo);
+
+  const resposta = await fetch('/api/upload/imagem', { method: 'POST', body: formData });
+  const dados = await resposta.json();
+
+  if (!resposta.ok || dados.status !== 'sucesso') {
+    throw new Error(dados.mensagem || 'Falha ao enviar a foto');
+  }
+
+  return { url: dados.url, nomeArquivo: dados.nomeArquivo };
+}
+
+// ─── Padrão Iterator: Galeria de Mídia (MediaIterator) ───────────────────────
+function setupGaleriaMidia() {
+  document.getElementById('btn-galeria-midia').addEventListener('click', () => abrirGaleria());
+  document.getElementById('btn-fechar-galeria').addEventListener('click', fecharGaleria);
+  document.getElementById('btn-galeria-anterior').addEventListener('click', () => {
+    mediaIteratorAtual?.previous();
+    renderizarGaleria();
+  });
+  document.getElementById('btn-galeria-proxima').addEventListener('click', () => {
+    mediaIteratorAtual?.next();
+    renderizarGaleria();
+  });
+}
+
+/** Abre a galeria de mídia da conversa ativa a partir da foto mais recente. */
+function abrirGaleria() {
+  mediaIteratorAtual = new MediaIterator(conversas.get(conversaAtiva) || []);
+  document.getElementById('modal-galeria').classList.add('aberto');
+  renderizarGaleria();
+}
+
+/** Abre a galeria já focada numa foto específica (clique numa foto dentro da conversa). */
+function abrirGaleriaEm(idMensagem) {
+  const mensagens = conversas.get(conversaAtiva) || [];
+  mediaIteratorAtual = new MediaIterator(mensagens);
+
+  const indiceClicado = mensagens.filter((m) => m.midia && !m.apagada).findIndex((m) => m.id === idMensagem);
+  if (indiceClicado >= 0) {
+    const posicaoDesejada = indiceClicado + 1; // posicaoAtual é 1-based
+    while (mediaIteratorAtual.posicaoAtual > posicaoDesejada) mediaIteratorAtual.previous();
+    while (mediaIteratorAtual.posicaoAtual < posicaoDesejada) mediaIteratorAtual.next();
+  }
+
+  document.getElementById('modal-galeria').classList.add('aberto');
+  renderizarGaleria();
+}
+
+function fecharGaleria() {
+  document.getElementById('modal-galeria').classList.remove('aberto');
+}
+
+function renderizarGaleria() {
+  const img = document.getElementById('galeria-imagem');
+  const vazio = document.getElementById('galeria-vazio');
+  const contador = document.getElementById('galeria-contador');
+  const remetenteEl = document.getElementById('galeria-remetente');
+  const dataEl = document.getElementById('galeria-data');
+  const btnAnterior = document.getElementById('btn-galeria-anterior');
+  const btnProxima = document.getElementById('btn-galeria-proxima');
+
+  const atual = mediaIteratorAtual?.atual();
+
+  if (!atual) {
+    img.classList.add('hidden');
+    vazio.classList.remove('hidden');
+    contador.textContent = '0 / 0';
+    remetenteEl.textContent = '';
+    dataEl.textContent = '';
+    btnAnterior.disabled = true;
+    btnProxima.disabled = true;
+    return;
+  }
+
+  img.classList.remove('hidden');
+  vazio.classList.add('hidden');
+  img.src = atual.midia.url;
+  img.alt = atual.midia.nomeArquivo || 'Foto';
+  contador.textContent = `${mediaIteratorAtual.posicaoAtual} / ${mediaIteratorAtual.total}`;
+  remetenteEl.textContent = atual.remetente === celularUsuario?.nome ? 'Você' : atual.remetente;
+  dataEl.textContent = formatarHora(atual.timestamp);
+  btnAnterior.disabled = !mediaIteratorAtual.hasPrevious();
+  btnProxima.disabled = !mediaIteratorAtual.hasNext();
+}
+
+// ─── Padrão Iterator: Busca no Histórico (SearchIterator) ────────────────────
+function setupBuscaChat() {
+  const btnAbrir = document.getElementById('btn-buscar-chat');
+  const input = document.getElementById('input-busca-chat');
+
+  btnAbrir.addEventListener('click', () => {
+    const barra = document.getElementById('barra-busca');
+    const estavaEscondida = barra.classList.contains('hidden');
+
+    if (estavaEscondida) {
+      barra.classList.remove('hidden');
+      barra.setAttribute('aria-hidden', 'false');
+      input.focus();
+    } else {
+      fecharBusca();
+    }
+  });
+
+  document.getElementById('btn-fechar-busca').addEventListener('click', fecharBusca);
+
+  input.addEventListener('input', () => {
+    searchIteratorAtual = new SearchIterator(conversas.get(conversaAtiva) || [], input.value);
+    atualizarResultadoBusca();
+  });
+
+  document.getElementById('btn-busca-anterior').addEventListener('click', () => {
+    searchIteratorAtual?.previous();
+    atualizarResultadoBusca();
+  });
+
+  document.getElementById('btn-busca-proxima').addEventListener('click', () => {
+    searchIteratorAtual?.next();
+    atualizarResultadoBusca();
+  });
+}
+
+function fecharBusca() {
+  const barra = document.getElementById('barra-busca');
+  barra.classList.add('hidden');
+  barra.setAttribute('aria-hidden', 'true');
+  document.getElementById('input-busca-chat').value = '';
+  document.getElementById('busca-contador').textContent = '';
+  limparDestaqueBusca();
+  searchIteratorAtual = null;
+}
+
+function limparDestaqueBusca() {
+  document.querySelectorAll('.message-wrapper.busca-destaque')
+    .forEach((el) => el.classList.remove('busca-destaque'));
+}
+
+function atualizarResultadoBusca() {
+  const contador = document.getElementById('busca-contador');
+  limparDestaqueBusca();
+
+  if (!searchIteratorAtual || searchIteratorAtual.total === 0) {
+    contador.textContent = document.getElementById('input-busca-chat').value ? '0 / 0' : '';
+    return;
+  }
+
+  contador.textContent = `${searchIteratorAtual.posicaoAtual} / ${searchIteratorAtual.total}`;
+
+  const atual = searchIteratorAtual.atual();
+  const wrapper = atual && document.querySelector(`.message-wrapper[data-id="${atual.id}"]`);
+  if (wrapper) {
+    wrapper.classList.add('busca-destaque');
+    wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+// ─── Padrão Visitor: "Ver Dados" (estatísticas do Canal Geral/Grupo) ─────────
+function setupEstatisticas() {
+  document.getElementById('btn-ver-dados').addEventListener('click', () => {
+    abrirModalEstatisticas();
+    socket.emit('solicitar_estatisticas', { conversaId: gerarConversaIdParaHistorico(conversaAtiva) });
+  });
+
+  document.getElementById('btn-fechar-estatisticas').addEventListener('click', () => {
+    document.getElementById('modal-estatisticas').classList.remove('aberto');
+  });
+}
+
+function abrirModalEstatisticas() {
+  const icone = document.getElementById('estatisticas-icon');
+  const titulo = document.getElementById('estatisticas-titulo');
+  const subtitulo = document.getElementById('estatisticas-subtitulo');
+
+  if (conversaAtiva === 'geral') {
+    icone.textContent = '🌐';
+    titulo.textContent = 'Canal Geral';
+    subtitulo.textContent = 'Estatísticas do canal público';
+  } else {
+    const g = grupos.get(conversaAtiva);
+    icone.textContent = g?.nome?.charAt(0).toUpperCase() || '👥';
+    titulo.textContent = g?.nome || 'Grupo';
+    subtitulo.textContent = `${g?.membros?.length || 0} membros`;
+  }
+
+  document.getElementById('estatisticas-corpo').innerHTML =
+    '<div class="estatisticas-carregando">📊 Calculando estatísticas...</div>';
+  document.getElementById('modal-estatisticas').classList.add('aberto');
+}
+
+/** Renderiza o resultado dos VisitanteEstatisticas concretos (evento 'estatisticas_carregadas'). */
+function renderizarEstatisticas(dados) {
+  if (!document.getElementById('modal-estatisticas').classList.contains('aberto')) return;
+
+  const maiorContagem = dados.porRemetente[0]?.total || 1;
+  const listaRemetentes = dados.porRemetente.map((r) => `
+    <div class="stat-ranking-item">
+      <span class="stat-ranking-nome">${escapeHtml(r.nome)}</span>
+      <div class="stat-ranking-barra-fundo">
+        <div class="stat-ranking-barra" style="width: ${Math.max(6, (r.total / maiorContagem) * 100)}%"></div>
+      </div>
+      <span class="stat-ranking-total">${r.total}</span>
+    </div>
+  `).join('');
+
+  const desde = dados.periodo.primeiraMensagemEm
+    ? new Date(dados.periodo.primeiraMensagemEm).toLocaleDateString('pt-BR')
+    : '—';
+
+  const horaPicoTexto = dados.horario.horaPico !== null
+    ? `${String(dados.horario.horaPico).padStart(2, '0')}h`
+    : '—';
+
+  document.getElementById('estatisticas-corpo').innerHTML = `
+    <div class="stat-cards">
+      <div class="stat-card">
+        <span class="stat-card-numero">${dados.totalMensagens}</span>
+        <span class="stat-card-label">Mensagens</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card-numero">${dados.totalMidia}</span>
+        <span class="stat-card-label">Fotos</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card-numero">${horaPicoTexto}</span>
+        <span class="stat-card-label">Horário ativo</span>
+      </div>
+    </div>
+
+    <div class="stat-secao-titulo">Conversando desde ${desde}</div>
+
+    <div class="stat-secao-titulo">Quem mais mandou mensagem</div>
+    <div class="stat-ranking">
+      ${listaRemetentes || '<div class="stat-vazio">Nenhuma mensagem ainda</div>'}
+    </div>
+  `;
 }
 
 // ─── Utils ────────────────────────────────────────────────────────────────────

@@ -24,6 +24,8 @@ const SCHEMA_QUERIES = [
     status TEXT,
     editada BOOLEAN,
     apagada BOOLEAN,
+    midia_url TEXT,
+    midia_nome TEXT,
     PRIMARY KEY (conversa_id, msg_timestamp, id)
   ) WITH CLUSTERING ORDER BY (msg_timestamp ASC)`,
 
@@ -67,6 +69,9 @@ const MIGRACOES = [
   // Padrão Command: editar mensagem / apagar para todos (com undo/redo).
   `ALTER TABLE mensagens_por_conversa ADD editada BOOLEAN`,
   `ALTER TABLE mensagens_por_conversa ADD apagada BOOLEAN`,
+  // Upload de fotos (pré-requisito do Padrão Iterator — MediaIterator).
+  `ALTER TABLE mensagens_por_conversa ADD midia_url TEXT`,
+  `ALTER TABLE mensagens_por_conversa ADD midia_nome TEXT`,
 ];
 
 module.exports = { SCHEMA_QUERIES, MIGRACOES };

@@ -5,6 +5,12 @@ const EstadoNaoPerturbe = require('./states/EstadoNaoPerturbe');
 const EstadoAusente = require('./states/EstadoAusente');
 const EstadoOffline = require('./states/EstadoOffline');
 const EstadoEnviada = require('./states/EstadoEnviada');
+const AnalisadorConversa = require('./core/AnalisadorConversa');
+const VisitanteContagemTotal = require('./visitors/VisitanteContagemTotal');
+const VisitanteContagemPorRemetente = require('./visitors/VisitanteContagemPorRemetente');
+const VisitanteContagemMidia = require('./visitors/VisitanteContagemMidia');
+const VisitanteHorarioPico = require('./visitors/VisitanteHorarioPico');
+const VisitantePeriodo = require('./visitors/VisitantePeriodo');
 
 /**
  * ServidorCentral - Implementa Observador (Padrão Observer)
@@ -241,6 +247,9 @@ class ServidorCentral extends Observador {
           }
         } catch (err) {
           console.error('[ServidorCentral] Erro ao salvar mensagem:', err.message);
+          // Sem acesso ao console do servidor, o erro real nunca chegava a
+          // quem estava testando — ecoa pro próprio remetente ver na tela.
+          socket.emit('erro_persistencia', { contexto: 'envio', mensagem: err.message });
         }
       });
 
@@ -402,6 +411,34 @@ class ServidorCentral extends Observador {
         } catch (err) {
           console.error(`[ServidorCentral] Erro ao carregar histórico de "${conversaId}":`, err.message);
           socket.emit('historico_carregado', { conversaId, chaveLocal, mensagens: [] });
+          socket.emit('erro_persistencia', { contexto: 'carregar_historico', mensagem: err.message });
+        }
+      });
+
+      /**
+       * Padrão Visitor: monta as estatísticas do "Ver dados" (Canal Geral e
+       * grupos) — cada VisitanteEstatisticas concreto sabe calcular UMA
+       * métrica; o AnalisadorConversa só percorre as mensagens uma vez por
+       * visitante, sem nenhum deles precisar saber como a lista é guardada.
+       */
+      socket.on('solicitar_estatisticas', async ({ conversaId }) => {
+        try {
+          const todasMensagens = await this.mensagemRepo.buscarTodasMensagens(conversaId);
+          const mensagensValidas = todasMensagens.filter((m) => !m.apagada);
+          const analisador = new AnalisadorConversa(mensagensValidas);
+
+          const dados = {
+            totalMensagens: analisador.aplicar(new VisitanteContagemTotal()),
+            porRemetente: analisador.aplicar(new VisitanteContagemPorRemetente()),
+            totalMidia: analisador.aplicar(new VisitanteContagemMidia()),
+            horario: analisador.aplicar(new VisitanteHorarioPico()),
+            periodo: analisador.aplicar(new VisitantePeriodo()),
+          };
+
+          socket.emit('estatisticas_carregadas', { conversaId, dados });
+        } catch (err) {
+          console.error(`[ServidorCentral] Erro ao calcular estatísticas de "${conversaId}":`, err.message);
+          socket.emit('erro_persistencia', { contexto: 'solicitar_estatisticas', mensagem: err.message });
         }
       });
 

@@ -16,8 +16,8 @@ class MensagemRepository {
    */
   async salvarMensagem(pacote, conversaId) {
     const query = `INSERT INTO mensagens_por_conversa
-      (conversa_id, msg_timestamp, id, texto, remetente, destinatarios, tipo, grupo_id, status, editada, apagada)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      (conversa_id, msg_timestamp, id, texto, remetente, destinatarios, tipo, grupo_id, status, editada, apagada, midia_url, midia_nome)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
     await this.db.execute(query, [
       conversaId,
@@ -35,6 +35,8 @@ class MensagemRepository {
       pacote.status || 'ENVIADA',
       pacote.editada || false,
       pacote.apagada || false,
+      pacote.midia?.url || null,
+      pacote.midia?.nomeArquivo || null,
     ], { prepare: true });
 
     console.log(`💾 [MensagemRepository] Mensagem salva — conversa: "${conversaId}"`);
@@ -68,7 +70,17 @@ class MensagemRepository {
       status: row.status || 'ENVIADA',
       editada: row.editada || false,
       apagada: row.apagada || false,
+      midia: this._midiaDaLinha(row),
     };
+  }
+
+  /**
+   * Reconstrói o campo `midia` (usado pelo Padrão Iterator — MediaIterator)
+   * a partir das colunas midia_url/midia_nome de uma linha do banco.
+   * @returns {?{url: string, nomeArquivo: string}}
+   */
+  _midiaDaLinha(row) {
+    return row.midia_url ? { url: row.midia_url, nomeArquivo: row.midia_nome || undefined } : null;
   }
 
   /**
@@ -122,14 +134,20 @@ class MensagemRepository {
    * @returns {Promise<Object[]>}
    */
   async buscarMensagens(conversaId, limite = 50) {
-    const query = `SELECT * FROM mensagens_por_conversa 
-      WHERE conversa_id = ? 
-      ORDER BY msg_timestamp ASC 
+    // DESC + LIMIT pega as N mensagens MAIS RECENTES (o que a tela de chat
+    // precisa). Com ASC, LIMIT corta nas N mais ANTIGAS — inofensivo
+    // enquanto a conversa tem poucas mensagens, mas uma conversa com mais
+    // de "limite" linhas (ex.: o Canal Geral, compartilhado por todo mundo)
+    // trava pra sempre nas mais velhas e nunca mais devolve nada recente.
+    // Era exatamente esse o motivo do Canal Geral "não persistir".
+    const query = `SELECT * FROM mensagens_por_conversa
+      WHERE conversa_id = ?
+      ORDER BY msg_timestamp DESC
       LIMIT ?`;
 
     const result = await this.db.execute(query, [conversaId, limite], { prepare: true });
 
-    return result.rows.map((row) => ({
+    return result.rows.reverse().map((row) => ({
       id: row.id,
       texto: row.texto,
       remetente: row.remetente,
@@ -142,6 +160,39 @@ class MensagemRepository {
       status: row.status || 'ENVIADA',
       editada: row.editada || false,
       apagada: row.apagada || false,
+      midia: this._midiaDaLinha(row),
+    }));
+  }
+
+  /**
+   * Busca TODAS as mensagens de uma conversa, sem paginação — usado só pelo
+   * Padrão Visitor (AnalisadorConversa/"Ver dados"), que precisa do histórico
+   * inteiro pra contar corretamente (ex.: total por remetente, horário de
+   * pico). Nunca use isso pra alimentar a tela de chat — ali o limite de 50
+   * (buscarMensagens) é proposital.
+   * @param {string} conversaId
+   * @returns {Promise<Object[]>}
+   */
+  async buscarTodasMensagens(conversaId) {
+    const query = `SELECT * FROM mensagens_por_conversa
+      WHERE conversa_id = ?
+      ORDER BY msg_timestamp ASC
+      LIMIT 100000`;
+
+    const result = await this.db.execute(query, [conversaId], { prepare: true });
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      texto: row.texto,
+      remetente: row.remetente,
+      destinatarios: row.destinatarios || [],
+      tipo: row.tipo,
+      timestamp: row.msg_timestamp.toISOString(),
+      grupoId: row.grupo_id || undefined,
+      status: row.status || 'ENVIADA',
+      editada: row.editada || false,
+      apagada: row.apagada || false,
+      midia: this._midiaDaLinha(row),
     }));
   }
 

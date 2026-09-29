@@ -51,18 +51,21 @@ class CelularUsuario extends Observavel {
    * 1. Delega para a estratégia atual o empacotamento da mensagem
    * 2. Chama notificarServidor() para transmitir ao ServidorCentral
    *
-   * @param {string} texto - Conteúdo da mensagem
+   * @param {string} texto - Conteúdo da mensagem (pode ser vazio se houver midia — foto sem legenda)
    * @param {string[]} destinatarios - Lista de destinatários (usado em EnvioPrivado)
    * @param {string} contextoOrigem - Onde a mensagem está sendo enviada ('geral', 'grupo_xxx', ou nome do usuário)
+   * @param {?{url: string, nomeArquivo: string}} midia - Foto anexada (upload), se houver
    */
-  escreverMensagem(texto, destinatarios = [], contextoOrigem = 'geral') {
-    if (!texto || texto.trim() === '') return;
+  escreverMensagem(texto, destinatarios = [], contextoOrigem = 'geral', midia = null) {
+    const textoLimpo = (texto || '').trim();
+    if (!textoLimpo && !midia) return;
 
     // Padrão Strategy: delega o empacotamento à estratégia ativa
     const pacote = this._estrategiaPrivacidade.empacotarMensagem(
-      texto.trim(),
+      textoLimpo,
       destinatarios,
-      contextoOrigem
+      contextoOrigem,
+      midia
     );
 
     // Padrão Observer: notifica o servidor com o pacote gerado

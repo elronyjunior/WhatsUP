@@ -10,6 +10,7 @@ const MensagemRepository = require('./src/repositories/MensagemRepository');
 const GrupoRepository = require('./src/repositories/GrupoRepository');
 const criarRotasAuth = require('./src/routes/auth');
 const criarRotasAdmin = require('./src/routes/admin');
+const criarRotasUpload = require('./src/routes/upload');
 const ServidorCentral = require('./src/ServidorCentral');
 
 const app = express();
@@ -28,6 +29,12 @@ app.use(express.json());
 
 // Serve os arquivos estáticos do frontend
 app.use(express.static(path.join(__dirname, '../chat_app')));
+
+// Upload de imagens (pré-requisito do Padrão Iterator — galeria de mídia) e
+// os arquivos salvos, servidos estaticamente pela própria URL devolvida
+const PASTA_UPLOADS = path.join(__dirname, 'uploads');
+app.use('/uploads', express.static(PASTA_UPLOADS));
+app.use('/api/upload', criarRotasUpload(PASTA_UPLOADS));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../chat_app/index.html'));

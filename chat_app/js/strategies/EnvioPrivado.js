@@ -18,9 +18,10 @@ class EnvioPrivado extends EstrategiaEnvio {
    * @param {string} texto
    * @param {string[]} destinatarios - Nomes dos usuários que podem ver a mensagem
    * @param {string} contextoOrigem - Contexto original (para mensagens privadas é o nome do destinatário)
+   * @param {?{url: string, nomeArquivo: string}} midia - Foto anexada, se houver
    * @returns {Pacote}
    */
-  empacotarMensagem(texto, destinatarios = [], contextoOrigem = '') {
+  empacotarMensagem(texto, destinatarios = [], contextoOrigem = '', midia = null) {
     if (destinatarios.length === 0) {
       throw new Error('[EnvioPrivado] Selecione ao menos um destinatário para mensagem privada.');
     }
@@ -32,6 +33,7 @@ class EnvioPrivado extends EstrategiaEnvio {
       destinatarios,
       tipo: 'PRIVADO',
       contextoOrigem: contexto,
+      midia,
     });
   }
 }

@@ -18,15 +18,17 @@ class EnvioPublico extends EstrategiaEnvio {
    * @param {string} texto
    * @param {string[]} destinatarios - Ignorado nesta estratégia (todos recebem)
    * @param {string} contextoOrigem - Onde a mensagem está sendo enviada (padrão: 'geral')
+   * @param {?{url: string, nomeArquivo: string}} midia - Foto anexada, se houver
    * @returns {Pacote}
    */
-  empacotarMensagem(texto, destinatarios = [], contextoOrigem = 'geral') {
+  empacotarMensagem(texto, destinatarios = [], contextoOrigem = 'geral', midia = null) {
     return new Pacote({
       texto,
       remetente: this.remetente,
       destinatarios: [],   // público = sem restrição de destinatários
       tipo: 'PUBLICO',
       contextoOrigem,
+      midia,
     });
   }
 }

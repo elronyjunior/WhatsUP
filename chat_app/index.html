@@ -113,6 +113,8 @@
       <span class="pattern-badge strategy">⚡ Strategy</span>
       <span class="pattern-badge state">🔄 State</span>
       <span class="pattern-badge command">↺ Command</span>
+      <span class="pattern-badge visitor">📊 Visitor</span>
+      <span class="pattern-badge iterator">🔍 Iterator</span>
       <span class="pattern-badge cassandra-badge">🗄️ Cassandra</span>
     </div>
   </div>
@@ -220,6 +222,16 @@
         <span class="pattern-label">Padrão</span>
         <span class="pattern-name command">Command</span>
       </div>
+      <div class="pattern-item">
+        <div class="pattern-dot visitor"></div>
+        <span class="pattern-label">Padrão</span>
+        <span class="pattern-name visitor">Visitor</span>
+      </div>
+      <div class="pattern-item">
+        <div class="pattern-dot iterator"></div>
+        <span class="pattern-label">Padrão</span>
+        <span class="pattern-name iterator">Iterator</span>
+      </div>
     </div>
 
   </aside>
@@ -241,8 +253,44 @@
           <div class="chat-channel-sub" id="header-sub">ServidorCentral (Observer) — todos os usuários</div>
         </div>
       </div>
+      <div class="chat-header-actions">
+        <button id="btn-buscar-chat" class="btn-header-acao" title="Buscar no histórico" aria-label="Buscar no histórico">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+        <button id="btn-galeria-midia" class="btn-header-acao" title="Galeria de mídia" aria-label="Galeria de mídia">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+          </svg>
+        </button>
+        <button id="btn-ver-dados" class="btn-header-acao hidden" title="Ver dados" aria-label="Ver dados da conversa">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+        </button>
+      </div>
       <span id="badge-estrategia" class="badge-estrategia publico">PÚBLICO</span>
     </header>
+
+    <!-- Barra de busca no histórico (Padrão Iterator — SearchIterator) -->
+    <div id="barra-busca" class="barra-busca hidden" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input id="input-busca-chat" type="text" placeholder="Buscar mensagens nesta conversa..." aria-label="Buscar mensagens nesta conversa" />
+      <span id="busca-contador" class="busca-contador"></span>
+      <button id="btn-busca-anterior" class="btn-busca-nav" title="Resultado anterior" aria-label="Resultado anterior">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+      </button>
+      <button id="btn-busca-proxima" class="btn-busca-nav" title="Próximo resultado" aria-label="Próximo resultado">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <button id="btn-fechar-busca" class="btn-busca-nav" title="Fechar busca" aria-label="Fechar busca">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
     <!-- Mensagens -->
     <div id="messages-container" role="log" aria-live="polite" aria-label="Mensagens do chat"></div>
 
@@ -277,12 +325,27 @@
         </div>
       </div>
 
+      <!-- Prévia da foto selecionada (upload de imagem) antes de enviar -->
+      <div id="preview-midia" class="preview-midia hidden">
+        <img id="preview-midia-img" src="" alt="Prévia da foto selecionada" />
+        <span id="preview-midia-nome" class="preview-midia-nome"></span>
+        <button id="btn-cancelar-midia" class="preview-midia-cancelar" title="Remover foto" aria-label="Remover foto">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
       <div class="input-row">
         <button id="btn-mensagem-secreta" class="btn-secreto" title="Mensagem Secreta" aria-label="Mensagem secreta">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
           </svg>
         </button>
+        <button id="btn-anexar-foto" class="btn-secreto" title="Anexar foto" aria-label="Anexar foto">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+          </svg>
+        </button>
+        <input type="file" id="input-arquivo-foto" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden" aria-hidden="true" />
         <textarea
           id="msg-input"
           placeholder="Digite uma mensagem..."
@@ -352,6 +415,66 @@
   </div>
 </div>
 
+<!-- ════════════════════════════════════════════
+     MODAL: VER DADOS (Padrão Visitor — estatísticas)
+════════════════════════════════════════════ -->
+<div id="modal-estatisticas" class="modal-overlay">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="estatisticas-titulo">
+
+    <div class="modal-header">
+      <div class="modal-header-icon" id="estatisticas-icon">🌐</div>
+      <div>
+        <div class="modal-titulo" id="estatisticas-titulo">Ver dados</div>
+        <div class="modal-subtitulo" id="estatisticas-subtitulo">Estatísticas da conversa</div>
+      </div>
+      <button id="btn-fechar-estatisticas" class="modal-fechar" aria-label="Fechar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="modal-body" id="estatisticas-corpo">
+      <div class="estatisticas-carregando">📊 Calculando estatísticas...</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     MODAL: GALERIA DE MÍDIA (Padrão Iterator — MediaIterator)
+════════════════════════════════════════════ -->
+<div id="modal-galeria" class="modal-overlay galeria-overlay">
+  <div class="galeria-card" role="dialog" aria-modal="true" aria-label="Galeria de mídia">
+    <div class="galeria-header">
+      <span id="galeria-contador" class="galeria-contador">0 / 0</span>
+      <button id="btn-fechar-galeria" class="modal-fechar" aria-label="Fechar galeria">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="galeria-corpo">
+      <button id="btn-galeria-anterior" class="galeria-nav-btn" aria-label="Foto anterior">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="galeria-imagem-wrap">
+        <img id="galeria-imagem" src="" alt="Foto ampliada" />
+        <div id="galeria-vazio" class="galeria-vazio hidden">Nenhuma foto nesta conversa ainda</div>
+      </div>
+      <button id="btn-galeria-proxima" class="galeria-nav-btn" aria-label="Próxima foto">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+
+    <div class="galeria-footer">
+      <span id="galeria-remetente" class="galeria-remetente"></span>
+      <span id="galeria-data" class="galeria-data"></span>
+    </div>
+  </div>
+</div>
+
 <!-- Toast -->
 <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
 
@@ -364,6 +487,7 @@
 <script src="js/interfaces/EstadoPresenca.js"></script>
 <script src="js/interfaces/EstadoMensagem.js"></script>
 <script src="js/interfaces/Comando.js"></script>
+<script src="js/interfaces/Iterador.js"></script>
 <script src="js/models/Pacote.js"></script>
 <script src="js/strategies/EnvioPublico.js"></script>
 <script src="js/strategies/EnvioPrivado.js"></script>
@@ -377,6 +501,8 @@
 <script src="js/commands/ComandoEnviarMensagem.js"></script>
 <script src="js/commands/ComandoApagarParaTodos.js"></script>
 <script src="js/commands/ComandoEditarMensagem.js"></script>
+<script src="js/iterators/MediaIterator.js"></script>
+<script src="js/iterators/SearchIterator.js"></script>
 <script src="js/core/HistoricoComandos.js"></script>
 <script src="js/core/CelularUsuario.js"></script>
 <script src="js/app.js"></script>

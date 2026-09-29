@@ -44,7 +44,8 @@ class Pacote {
     destinatarios = [],
     tipo = 'PUBLICO',
     modoExceto = false,
-    contextoOrigem = 'geral'  // 'geral', 'grupo_xxx', ou nomeUsuario (privado)
+    contextoOrigem = 'geral',  // 'geral', 'grupo_xxx', ou nomeUsuario (privado)
+    midia = null  // null (só texto) ou { url, nomeArquivo } (foto anexada)
   }) {
     this.id = gerarUUID();
     this.texto = texto;
@@ -54,6 +55,7 @@ class Pacote {
     this.modoExceto = modoExceto; // Para mensagens SECRETO: indica "todos exceto"
     this.contextoOrigem = contextoOrigem; // Rastreia onde a mensagem foi enviada
     this.timestamp = new Date().toISOString();
+    this.midia = midia;
   }
 
   toJSON() {
@@ -66,6 +68,7 @@ class Pacote {
       modoExceto: this.modoExceto,
       contextoOrigem: this.contextoOrigem,
       timestamp: this.timestamp,
+      midia: this.midia,
     };
   }
 }
