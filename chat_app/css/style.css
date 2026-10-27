@@ -230,6 +230,7 @@ html, body {
 .pattern-badge.visitor  { border-color: rgba(16,185,129,0.4); color: var(--color-green); }
 .pattern-badge.iterator { border-color: rgba(249,115,22,0.4); color: var(--color-orange); }
 .pattern-badge.memento  { border-color: rgba(236,72,153,0.4); color: var(--color-pink); }
+.pattern-badge.mediator { border-color: rgba(132,204,22,0.4); color: var(--color-lime); }
 
 /* ─── CHAT SCREEN ────────────────────────────────────────────────── */
 #chat-screen {
