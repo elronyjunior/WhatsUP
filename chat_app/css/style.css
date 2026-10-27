@@ -17,6 +17,7 @@
   --color-yellow:    #F59E0B;
   --color-orange:    #F97316;
   --color-pink:      #EC4899;
+  --color-lime:      #84CC16;
 
   --text-primary:  #E6EDF3;
   --text-secondary:#8B949E;
@@ -652,6 +653,7 @@ html, body {
 .pattern-dot.visitor  { background: var(--color-green); }
 .pattern-dot.iterator { background: var(--color-orange); }
 .pattern-dot.memento  { background: var(--color-pink); }
+.pattern-dot.mediator { background: var(--color-lime); }
 .pattern-label { color: var(--text-secondary); }
 .pattern-name { font-weight: 600; margin-left: auto; }
 .pattern-name.observer { color: var(--color-primary-l); }
@@ -661,8 +663,9 @@ html, body {
 .pattern-name.visitor  { color: var(--color-green); }
 .pattern-name.iterator { color: var(--color-orange); }
 .pattern-name.memento  { color: var(--color-pink); }
+.pattern-name.mediator { color: var(--color-lime); }
 
-/* Com 7 padrões listados, em telas baixas (notebooks) o painel passa de 35%
+/* Com 8 padrões listados, em telas baixas (notebooks) o painel passa de 35%
    da barra lateral e espreme a lista de conversas — vira 2 colunas, sem o
    rótulo "Padrão" repetido, voltando a ocupar o espaço de antes. Fica DEPOIS
    de .pattern-name pra vencer o margin-left:auto dele. */
@@ -2228,4 +2231,134 @@ html, body {
   .galeria-card { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; }
   .galeria-nav-btn { width: 34px; height: 34px; }
   .stat-ranking-nome { width: 70px; }
+}
+
+/* ─── Padrão Mediator: tela de ligação (TelaLigacao) ─────────────── */
+.ligacao-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: radial-gradient(circle at 50% 30%, var(--bg-surface2), var(--bg-base) 70%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 72px 16px 48px;
+  overflow: hidden;
+}
+
+.ligacao-info {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.ligacao-avatar {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-cyan));
+  color: #fff;
+  font-size: 44px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-glow-purple);
+}
+
+/* Enquanto chama/toca, o avatar "pulsa" como no WhatsApp */
+.ligacao-overlay:not(.conectada):not(.encerrando) .ligacao-avatar {
+  animation: ligacao-pulso 1.6s ease-in-out infinite;
+}
+
+@keyframes ligacao-pulso {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.45); }
+  50%      { box-shadow: 0 0 0 18px rgba(124, 58, 237, 0); }
+}
+
+.ligacao-nome { font-size: 24px; font-weight: 600; color: var(--text-primary); }
+.ligacao-status { font-size: 14px; color: var(--text-secondary); min-height: 21px; }
+.ligacao-cronometro { font-size: 15px; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.ligacao-overlay.encerrando .ligacao-status { color: var(--color-red); }
+
+.ligacao-controles {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.ligacao-btn {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 1px solid var(--border-active);
+  background: var(--bg-surface3);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+
+.ligacao-btn:hover:not(:disabled) { background: var(--bg-hover); }
+.ligacao-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ligacao-btn.desligado { background: var(--text-primary); color: var(--bg-base); }
+.ligacao-btn.encerrar { background: var(--color-red); border-color: transparent; color: #fff; }
+.ligacao-btn.encerrar:hover { background: #DC2626; }
+.ligacao-btn.atender { background: var(--color-green); border-color: transparent; color: #fff; }
+.ligacao-btn.atender:hover { background: #059669; }
+
+/* Vídeo: só aparece em chamada de vídeo. O remoto ocupa a tela depois que
+   conecta; o local fica no cantinho (espelhado, como uma selfie). */
+.ligacao-video-remoto,
+.ligacao-video-local { display: none; background: #000; }
+
+.ligacao-overlay.modo-video .ligacao-video-local {
+  display: block;
+  position: absolute;
+  right: 16px;
+  bottom: 136px;
+  width: 160px;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-active);
+  transform: scaleX(-1);
+  z-index: 2;
+}
+
+.ligacao-overlay.modo-video.camera-desligada .ligacao-video-local { visibility: hidden; }
+
+.ligacao-overlay.modo-video.conectada .ligacao-video-remoto {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+.ligacao-overlay.modo-video.conectada .ligacao-avatar { display: none; }
+.ligacao-overlay.modo-video.conectada .ligacao-info {
+  padding: 8px 16px;
+  border-radius: var(--radius-lg);
+  background: rgba(0, 0, 0, 0.45);
+}
+
+@media (max-width: 480px) {
+  .ligacao-overlay { padding: 56px 16px 32px; }
+  .ligacao-avatar { width: 96px; height: 96px; font-size: 38px; }
+  .ligacao-controles { gap: 14px; }
+  .ligacao-btn { width: 54px; height: 54px; }
+  .ligacao-overlay.modo-video .ligacao-video-local { width: 104px; bottom: 112px; }
 }

@@ -53,6 +53,9 @@ class ServidorCentral extends Observador {
     // da vida do processo — aceitável neste protótipo; uma versão de
     // produção precisaria de expiração/LRU para não vazar memória.
     this.estadosMensagem = new Map();
+    // Map<nome, nomeDoOutro> — quem está em ligação (ou chamando) com quem.
+    // Serve pra responder "ocupado" e pra avisar o outro lado se alguém cair.
+    this.ligacoesAtivas = new Map();
     this._configurarEventos();
     console.log('✅ [ServidorCentral] Inicializado — aguardando conexões de CelularUsuario...');
   }
@@ -442,10 +445,16 @@ class ServidorCentral extends Observador {
         }
       });
 
+      this._configurarEventosLigacao(socket);
+
       // Desconexão
       socket.on('disconnect', () => {
         const nome = this.usuariosConectados.get(socket.id);
         if (nome) {
+          // Caiu no meio de uma ligação: avisa o outro lado pra encerrar
+          const outro = this._limparLigacao(nome);
+          if (outro) this._repassarLigacao(nome, outro, 'ligacao_encerrada', {});
+
           this.usuariosConectados.delete(socket.id);
           // Transição Interna do Padrão State: sem socket ativo, o único
           // estado possível é Offline — é o próprio servidor quem retém isso.
@@ -460,6 +469,80 @@ class ServidorCentral extends Observador {
         }
       });
     });
+  }
+
+  /**
+   * Ligação de voz/vídeo (Padrão Mediator no cliente — TelaLigacao).
+   * O áudio/vídeo vai direto de navegador pra navegador (WebRTC); o
+   * servidor só faz a sinalização: repassa convite, resposta, candidatos
+   * ICE, recusa e encerramento para o outro participante.
+   * @param {import('socket.io').Socket} socket
+   */
+  _configurarEventosLigacao(socket) {
+    socket.on('ligacao_convite', ({ para, tipo, oferta }) => {
+      const de = this.usuariosConectados.get(socket.id);
+      if (!de || !para || para === de) return;
+
+      if (this.ligacoesAtivas.has(para)) {
+        socket.emit('ligacao_recusada', { de: para, motivo: 'ocupado' });
+        return;
+      }
+      if (!this._repassarLigacao(de, para, 'ligacao_recebida', { tipo, oferta })) {
+        socket.emit('ligacao_indisponivel', { de: para });
+        return;
+      }
+
+      this.ligacoesAtivas.set(de, para);
+      this.ligacoesAtivas.set(para, de);
+      console.log(`📞 [ServidorCentral] "${de}" ligando para "${para}" (${tipo})`);
+    });
+
+    socket.on('ligacao_resposta', ({ para, resposta }) => {
+      const de = this.usuariosConectados.get(socket.id);
+      if (de) this._repassarLigacao(de, para, 'ligacao_aceita', { resposta });
+    });
+
+    socket.on('ligacao_ice', ({ para, candidato }) => {
+      const de = this.usuariosConectados.get(socket.id);
+      if (de) this._repassarLigacao(de, para, 'ligacao_ice', { candidato });
+    });
+
+    socket.on('ligacao_recusar', ({ para, motivo }) => {
+      const de = this.usuariosConectados.get(socket.id);
+      if (!de) return;
+      // "ocupado" vindo do cliente não desfaz a ligação que ele já está fazendo
+      if (motivo !== 'ocupado') this._limparLigacao(de);
+      this._repassarLigacao(de, para, 'ligacao_recusada', { motivo });
+    });
+
+    socket.on('ligacao_encerrar', ({ para }) => {
+      const de = this.usuariosConectados.get(socket.id);
+      if (!de) return;
+      this._limparLigacao(de);
+      this._repassarLigacao(de, para, 'ligacao_encerrada', {});
+      console.log(`📴 [ServidorCentral] "${de}" encerrou a ligação com "${para}"`);
+    });
+  }
+
+  /**
+   * Envia um evento de ligação para o socket ativo de `para`.
+   * @returns {boolean} false se `para` não está conectado
+   */
+  _repassarLigacao(de, para, evento, dados) {
+    const socketId = this._socketIdDoUsuario(para);
+    if (!socketId) return false;
+    this.io.to(socketId).emit(evento, { de, ...dados });
+    return true;
+  }
+
+  /** Tira `nome` (e quem estava com ele) de ligacoesAtivas. Retorna o outro participante. */
+  _limparLigacao(nome) {
+    const outro = this.ligacoesAtivas.get(nome);
+    this.ligacoesAtivas.delete(nome);
+    if (outro && this.ligacoesAtivas.get(outro) === nome) {
+      this.ligacoesAtivas.delete(outro);
+    }
+    return outro || null;
   }
 
   /**

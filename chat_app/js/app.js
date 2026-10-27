@@ -51,6 +51,9 @@ let gerenciadorRascunhos = null; // Zelador: guarda um memento por conversa
 let campoMensagem = null;        // Originador: o <textarea> que cria/restaura mementos
 let timerSalvarRascunho = null;
 
+// ─── Padrão Mediator: ligação de voz/vídeo ───────────────────────────────────
+let telaLigacao = null; // Mediador Concreto que coordena botões, toque, cronômetro e WebRTC
+
 conversas.set('geral', []);
 
 // ─── Visual Viewport (teclado virtual mobile) ─────────────────────────────────
@@ -532,6 +535,7 @@ function mostrarChat(nome) {
   renderizarConversas();
   setupChatEvents();
   setupModalGrupo();
+  setupLigacao();
   setupMenuPresenca();
   iniciarMonitorInatividade();
   solicitarPermissaoNotificacaoSeNecessario();
@@ -1224,6 +1228,9 @@ function atualizarHeader(id) {
   // como no WhatsApp, uma conversa privada 1-para-1 não tem essa tela.
   document.getElementById('btn-ver-dados').classList.toggle('hidden', !(id === 'geral' || grupos.has(id)));
 
+  // Padrão Mediator: ligação só existe em conversa privada (1-para-1)
+  telaLigacao?.definirConversa(id !== 'geral' && !grupos.has(id));
+
   if (id === 'geral') {
     iconEl.textContent = '🌐';
     iconEl.className = 'chat-channel-icon geral';
@@ -1566,6 +1573,38 @@ function criarGrupo() {
   });
 
   fecharModal();
+}
+
+// ─── Padrão Mediator: Ligação de voz/vídeo ────────────────────────────────────
+/**
+ * Cria a TelaLigacao (Mediador Concreto) uma única vez. Ela mesma monta os
+ * componentes e escuta a sinalização do socket — o app.js só entrega o que
+ * ela precisa saber do resto da interface (conversa aberta, quem está
+ * online, como gravar o registro da chamada e como mostrar um toast).
+ */
+function setupLigacao() {
+  if (telaLigacao) return;
+
+  telaLigacao = new TelaLigacao({
+    socket,
+    obterContatoAtual: () => conversaAtiva,
+    contatoEstaOnline: (nome) => usuariosOnline.some((u) => u.nome === nome),
+    registrarChamada: registrarChamadaNoHistorico,
+    avisar: mostrarToast,
+  });
+
+  telaLigacao.definirConversa(conversaAtiva !== 'geral' && !grupos.has(conversaAtiva));
+}
+
+/**
+ * Registro "📞 Chamada de voz · 02:31" na conversa — vai pelo mesmo caminho
+ * de uma mensagem privada normal (Strategy + Observer), então é persistido
+ * no banco e aparece para os dois lados.
+ */
+function registrarChamadaNoHistorico(contato, texto) {
+  if (!celularUsuario) return;
+  celularUsuario.mudarEstrategia(new EnvioPrivado(celularUsuario.nome));
+  celularUsuario.escreverMensagem(texto, [contato], contato);
 }
 
 // ─── Padrão State: Presença do Usuário ────────────────────────────────────────

@@ -238,6 +238,11 @@
         <span class="pattern-label">Padrão</span>
         <span class="pattern-name memento">Memento</span>
       </div>
+      <div class="pattern-item">
+        <div class="pattern-dot mediator"></div>
+        <span class="pattern-label">Padrão</span>
+        <span class="pattern-name mediator">Mediator</span>
+      </div>
     </div>
 
   </aside>
@@ -260,6 +265,17 @@
         </div>
       </div>
       <div class="chat-header-actions">
+        <!-- Padrão Mediator: BotaoIniciarLigacao (voz / vídeo) — só em conversa privada -->
+        <button id="btn-ligar-voz" class="btn-header-acao hidden" title="Ligação de voz" aria-label="Ligação de voz">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>
+          </svg>
+        </button>
+        <button id="btn-ligar-video" class="btn-header-acao hidden" title="Ligação de vídeo" aria-label="Ligação de vídeo">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+          </svg>
+        </button>
         <button id="btn-buscar-chat" class="btn-header-acao" title="Buscar no histórico" aria-label="Buscar no histórico">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -481,6 +497,47 @@
   </div>
 </div>
 
+<!-- ════════════════════════════════════════════
+     TELA DE LIGAÇÃO (Padrão Mediator — TelaLigacao)
+════════════════════════════════════════════ -->
+<div id="tela-ligacao" class="ligacao-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="ligacao-nome">
+  <video id="ligacao-video-remoto" class="ligacao-video-remoto" autoplay playsinline></video>
+  <video id="ligacao-video-local" class="ligacao-video-local" autoplay playsinline muted></video>
+
+  <div class="ligacao-info">
+    <div class="ligacao-avatar" id="ligacao-avatar">?</div>
+    <div class="ligacao-nome" id="ligacao-nome"></div>
+    <div class="ligacao-status" id="ligacao-status" aria-live="polite"></div>
+    <div class="ligacao-cronometro hidden" id="ligacao-cronometro">00:00</div>
+  </div>
+
+  <div class="ligacao-controles">
+    <button id="btn-ligacao-microfone" class="ligacao-btn hidden" title="Silenciar microfone" aria-label="Microfone">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/>
+      </svg>
+    </button>
+    <button id="btn-ligacao-camera" class="ligacao-btn hidden" title="Desligar câmera" aria-label="Câmera">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+      </svg>
+    </button>
+    <button id="btn-ligacao-recusar" class="ligacao-btn encerrar hidden" title="Recusar" aria-label="Recusar ligação">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <button id="btn-ligacao-encerrar" class="ligacao-btn encerrar hidden" title="Encerrar" aria-label="Encerrar ligação">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(135deg)">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>
+      </svg>
+    </button>
+    <button id="btn-ligacao-atender" class="ligacao-btn atender hidden" title="Atender" aria-label="Atender ligação">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
 <!-- Toast -->
 <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
 
@@ -494,6 +551,7 @@
 <script src="js/interfaces/EstadoMensagem.js"></script>
 <script src="js/interfaces/Comando.js"></script>
 <script src="js/interfaces/Iterador.js"></script>
+<script src="js/interfaces/Mediador.js"></script>
 <script src="js/models/Pacote.js"></script>
 <script src="js/strategies/EnvioPublico.js"></script>
 <script src="js/strategies/EnvioPrivado.js"></script>
@@ -514,6 +572,18 @@
 <script src="js/core/GerenciadorRascunhos.js"></script>
 <script src="js/core/HistoricoComandos.js"></script>
 <script src="js/core/CelularUsuario.js"></script>
+<script src="js/componentes/ComponenteMediado.js"></script>
+<script src="js/componentes/BotaoIniciarLigacao.js"></script>
+<script src="js/componentes/BotaoAtender.js"></script>
+<script src="js/componentes/BotaoRecusar.js"></script>
+<script src="js/componentes/BotaoMicrofone.js"></script>
+<script src="js/componentes/BotaoCamera.js"></script>
+<script src="js/componentes/BotaoEncerrar.js"></script>
+<script src="js/componentes/CronometroLigacao.js"></script>
+<script src="js/componentes/RotuloStatusLigacao.js"></script>
+<script src="js/componentes/ToqueChamada.js"></script>
+<script src="js/componentes/ConexaoChamada.js"></script>
+<script src="js/mediators/TelaLigacao.js"></script>
 <script src="js/app.js"></script>
 
 </body>
