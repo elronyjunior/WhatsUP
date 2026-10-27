@@ -16,6 +16,7 @@
   --color-red:       #EF4444;
   --color-yellow:    #F59E0B;
   --color-orange:    #F97316;
+  --color-pink:      #EC4899;
 
   --text-primary:  #E6EDF3;
   --text-secondary:#8B949E;
@@ -227,6 +228,7 @@ html, body {
 .pattern-badge.command  { border-color: rgba(239,68,68,0.4); color: var(--color-red); }
 .pattern-badge.visitor  { border-color: rgba(16,185,129,0.4); color: var(--color-green); }
 .pattern-badge.iterator { border-color: rgba(249,115,22,0.4); color: var(--color-orange); }
+.pattern-badge.memento  { border-color: rgba(236,72,153,0.4); color: var(--color-pink); }
 
 /* ─── CHAT SCREEN ────────────────────────────────────────────────── */
 #chat-screen {
@@ -583,6 +585,9 @@ html, body {
 .conv-preview-vazio { color: var(--text-muted); font-style: italic; }
 .conv-preview-apagada { color: var(--text-muted); font-style: italic; }
 
+/* Padrão Memento: "Rascunho:" em verde, como no WhatsApp */
+.conv-preview-rascunho { font-weight: 600; color: var(--color-green); }
+
 /* Badge de Não Lidas */
 .conv-badge {
   background: var(--color-primary);
@@ -646,6 +651,7 @@ html, body {
 .pattern-dot.command  { background: var(--color-red); }
 .pattern-dot.visitor  { background: var(--color-green); }
 .pattern-dot.iterator { background: var(--color-orange); }
+.pattern-dot.memento  { background: var(--color-pink); }
 .pattern-label { color: var(--text-secondary); }
 .pattern-name { font-weight: 600; margin-left: auto; }
 .pattern-name.observer { color: var(--color-primary-l); }
@@ -654,6 +660,18 @@ html, body {
 .pattern-name.command  { color: var(--color-red); }
 .pattern-name.visitor  { color: var(--color-green); }
 .pattern-name.iterator { color: var(--color-orange); }
+.pattern-name.memento  { color: var(--color-pink); }
+
+/* Com 7 padrões listados, em telas baixas (notebooks) o painel passa de 35%
+   da barra lateral e espreme a lista de conversas — vira 2 colunas, sem o
+   rótulo "Padrão" repetido, voltando a ocupar o espaço de antes. Fica DEPOIS
+   de .pattern-name pra vencer o margin-left:auto dele. */
+@media (max-height: 800px) {
+  .sidebar-patterns { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 8px 10px; }
+  .pattern-item { padding: 5px 8px; gap: 6px; }
+  .pattern-label { display: none; }
+  .pattern-name { margin-left: 0; }
+}
 
 /* ─── CHAT AREA ──────────────────────────────────────────────────── */
 .chat-area {

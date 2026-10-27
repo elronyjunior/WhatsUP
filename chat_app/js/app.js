@@ -45,6 +45,12 @@ let arquivoFotoSelecionado = null; // File aguardando envio (após seleção, an
 let mediaIteratorAtual = null;
 let searchIteratorAtual = null;
 
+// ─── Padrão Memento: rascunhos de mensagem ───────────────────────────────────
+const ATRASO_SALVAR_RASCUNHO_MS = 400;
+let gerenciadorRascunhos = null; // Zelador: guarda um memento por conversa
+let campoMensagem = null;        // Originador: o <textarea> que cria/restaura mementos
+let timerSalvarRascunho = null;
+
 conversas.set('geral', []);
 
 // ─── Visual Viewport (teclado virtual mobile) ─────────────────────────────────
@@ -519,6 +525,9 @@ function mostrarChat(nome) {
   document.getElementById('avatar-inicial').textContent =
     nome.charAt(0).toUpperCase();
 
+  // Rascunhos antes da primeira renderização da lista, que já mostra "Rascunho:"
+  iniciarRascunhos(nome);
+
   atualizarHeader('geral');
   renderizarConversas();
   setupChatEvents();
@@ -526,6 +535,9 @@ function mostrarChat(nome) {
   setupMenuPresenca();
   iniciarMonitorInatividade();
   solicitarPermissaoNotificacaoSeNecessario();
+
+  // A conversa que abre sozinha ao entrar (Canal Geral) também recupera o rascunho
+  restaurarRascunho(conversaAtiva);
 
   carregarHistorico('geral');
 }
@@ -554,9 +566,13 @@ function setupChatEvents() {
   });
 
   msgInput.addEventListener('input', () => {
-    msgInput.style.height = 'auto';
-    msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
+    campoMensagem.ajustarAltura();
+    agendarSalvarRascunho();
   });
+
+  // O salvamento do rascunho é adiado enquanto o usuário digita; ao fechar ou
+  // recarregar a aba, grava na hora o que ainda estava pendente.
+  window.addEventListener('pagehide', () => salvarRascunho(conversaAtiva));
 
   // Fallback universal: garante que o input fique visível ao receber foco
   // (útil para browsers que não disparam visualViewport resize corretamente)
@@ -770,8 +786,7 @@ async function enviarMensagem() {
       contextoOrigem: conversaAtiva,
     });
 
-    input.value = '';
-    input.style.height = 'auto';
+    concluirEnvioDoRascunho(conversaAtiva);
 
     // Fecha painel e zera seleção
     fecharPainelSecreto();
@@ -786,6 +801,9 @@ async function enviarMensagem() {
 
   // ── Envio normal ──────────────────────────────────────────────────
   const btnEnviar = document.getElementById('btn-enviar');
+  // A conversa de destino é fixada AGORA: o upload abaixo pode demorar e o
+  // usuário pode abrir outra conversa nesse meio tempo.
+  const destino = conversaAtiva;
   try {
     // Upload de fotos (pré-requisito do Padrão Iterator — MediaIterator):
     // manda o arquivo primeiro via HTTP, só o texto+URL viajam pelo socket.
@@ -795,20 +813,20 @@ async function enviarMensagem() {
       midia = await enviarArquivoParaServidor(arquivo);
     }
 
-    if (conversaAtiva === 'geral') {
+    if (destino === 'geral') {
       celularUsuario.mudarEstrategia(
         new EnvioPublico(celularUsuario.nome)
       );
 
       celularUsuario.escreverMensagem(texto, [], 'geral', midia);
-    } else if (grupos.has(conversaAtiva)) {
+    } else if (grupos.has(destino)) {
       socket.emit('mensagem_grupo', {
-        grupoId: conversaAtiva,
+        grupoId: destino,
         texto,
         remetente: celularUsuario.nome,
-        destinatarios: grupos.get(conversaAtiva).membros,
+        destinatarios: grupos.get(destino).membros,
         tipo: 'GRUPO',
-        contextoOrigem: conversaAtiva,
+        contextoOrigem: destino,
         timestamp: new Date().toISOString(),
         id: `msg_${Date.now()}`,
         midia,
@@ -818,11 +836,10 @@ async function enviarMensagem() {
         new EnvioPrivado(celularUsuario.nome)
       );
 
-      celularUsuario.escreverMensagem(texto, [conversaAtiva], conversaAtiva, midia);
+      celularUsuario.escreverMensagem(texto, [destino], destino, midia);
     }
 
-    input.value = '';
-    input.style.height = 'auto';
+    concluirEnvioDoRascunho(destino);
     cancelarMidiaSelecionada();
     input.focus();
   } catch (err) {
@@ -834,8 +851,20 @@ async function enviarMensagem() {
 
 // ─── Gerenciamento de Conversas ───────────────────────────────────────────────
 function abrirConversa(id) {
+  // Padrão Memento: ao trocar de conversa, o que estava sendo digitado na
+  // anterior vira um memento guardado, e o campo recebe o rascunho (se
+  // houver) da conversa que está abrindo.
+  const trocouDeConversa = id !== conversaAtiva;
+  if (trocouDeConversa) {
+    salvarRascunho(conversaAtiva);
+  }
+
   conversaAtiva = id;
   naoLidas.set(id, 0);
+
+  if (trocouDeConversa) {
+    restaurarRascunho(id);
+  }
 
   carregarHistorico(id);
 
@@ -845,6 +874,8 @@ function abrirConversa(id) {
   marcarComoLidaSeNecessario(id);
 
   document.getElementById('chat-screen').classList.add('conversa-aberta');
+  // No celular o campo só passa a ter altura depois da classe acima
+  campoMensagem?.ajustarAltura();
 
   if (!ehTelaMobile()) {
     document.getElementById('msg-input').focus();
@@ -852,7 +883,11 @@ function abrirConversa(id) {
 }
 
 function voltarParaListaConversas() {
+  // No celular, voltar à lista é "sair" da conversa: o que estava digitado
+  // já aparece como rascunho na lista, sem esperar abrir outra conversa.
+  salvarRascunho(conversaAtiva);
   document.getElementById('chat-screen').classList.remove('conversa-aberta');
+  renderizarConversas();
 }
 
 function ehTelaMobile() {
@@ -1013,13 +1048,14 @@ function renderizarConversas() {
 
         <div class="conv-preview">
           ${
-            geralUltima
+            previewRascunho('geral') ??
+            (geralUltima
               ? `<span class="conv-preview-remetente">${
                   geralUltima.remetente === meuNome
                     ? 'Você'
                     : geralUltima.remetente
                 }:</span> ${previewTexto(geralUltima)}`
-              : '<span class="conv-preview-vazio">Sem mensagens ainda</span>'
+              : '<span class="conv-preview-vazio">Sem mensagens ainda</span>')
           }
         </div>
       </div>
@@ -1065,13 +1101,14 @@ function renderizarConversas() {
 
               <div class="conv-preview">
                 ${
-                  ultima
+                  previewRascunho(g.id) ??
+                  (ultima
                     ? `<span class="conv-preview-remetente">${
                         ultima.remetente === meuNome
                           ? 'Você'
                           : ultima.remetente
                       }:</span> ${previewTexto(ultima)}`
-                    : `<span class="conv-preview-vazio">${g.membros.length} membros</span>`
+                    : `<span class="conv-preview-vazio">${g.membros.length} membros</span>`)
                 }
               </div>
             </div>
@@ -1126,13 +1163,14 @@ function renderizarConversas() {
 
             <div class="conv-preview">
               ${
-                ultima
+                previewRascunho(u.nome) ??
+                (ultima
                   ? `<span class="conv-preview-remetente">${
                       ultima.remetente === meuNome
                         ? 'Você'
                         : ultima.remetente
                     }:</span> ${previewTexto(ultima)}`
-                  : '<span class="conv-preview-vazio">Iniciar conversa...</span>'
+                  : '<span class="conv-preview-vazio">Iniciar conversa...</span>')
               }
             </div>
           </div>
@@ -2200,6 +2238,82 @@ function renderizarEstatisticas(dados) {
       ${listaRemetentes || '<div class="stat-vazio">Nenhuma mensagem ainda</div>'}
     </div>
   `;
+}
+
+// ─── Padrão Memento: Rascunhos de Mensagem ───────────────────────────────────
+// Originador: CampoMensagem (cria e restaura mementos)
+// Memento:    RascunhoMemento (a "foto" imutável do texto + cursor)
+// Zelador:    GerenciadorRascunhos (guarda um memento por conversa, sem abri-lo)
+function iniciarRascunhos(nome) {
+  gerenciadorRascunhos = new GerenciadorRascunhos(nome);
+  campoMensagem = new CampoMensagem(document.getElementById('msg-input'));
+
+  // O mesmo usuário em outra aba gravou ou apagou rascunhos: relê e atualiza a
+  // lista (o campo desta aba não é tocado — o que está digitado aqui é daqui).
+  window.addEventListener('storage', (evento) => {
+    if (evento.key === null || evento.key === gerenciadorRascunhos.chaveArmazenamento) {
+      gerenciadorRascunhos.recarregar();
+      renderizarConversas();
+    }
+  });
+}
+
+/** Tira uma "foto" do que está no campo e entrega ao zelador, na conversa indicada. */
+function salvarRascunho(chaveConversa) {
+  clearTimeout(timerSalvarRascunho);
+  if (!gerenciadorRascunhos || !campoMensagem) return;
+
+  gerenciadorRascunhos.guardar(chaveConversa, campoMensagem.criarMemento());
+}
+
+/** Enquanto o usuário digita, grava o rascunho só depois de uma pausa curta. */
+function agendarSalvarRascunho() {
+  clearTimeout(timerSalvarRascunho);
+
+  const chaveConversa = conversaAtiva;
+  timerSalvarRascunho = setTimeout(() => {
+    // Se trocou de conversa nesse intervalo, abrirConversa() já salvou a anterior
+    if (chaveConversa === conversaAtiva) salvarRascunho(chaveConversa);
+  }, ATRASO_SALVAR_RASCUNHO_MS);
+}
+
+/** Devolve ao campo o rascunho da conversa — ou esvazia, se ela não tem nenhum. */
+function restaurarRascunho(chaveConversa) {
+  campoMensagem?.restaurar(gerenciadorRascunhos?.obter(chaveConversa) ?? null);
+}
+
+function descartarRascunho(chaveConversa) {
+  gerenciadorRascunhos?.descartar(chaveConversa);
+}
+
+/**
+ * A mensagem da conversa saiu: o rascunho dela deixa de existir e, se ela
+ * ainda é a conversa aberta, o campo é esvaziado (se o usuário já abriu outra
+ * conversa durante o upload da foto, o campo dela não pode ser tocado).
+ */
+function concluirEnvioDoRascunho(chaveConversa) {
+  descartarRascunho(chaveConversa);
+  if (conversaAtiva === chaveConversa) campoMensagem.limpar();
+}
+
+/**
+ * Conversa que o usuário está olhando agora. No celular, com a lista de
+ * conversas na tela, a conversa "ativa" não está sendo vista.
+ */
+function conversaEmVista(chaveConversa) {
+  if (chaveConversa !== conversaAtiva) return false;
+  return !ehTelaMobile() || document.getElementById('chat-screen').classList.contains('conversa-aberta');
+}
+
+/**
+ * "Rascunho: texto..." para a lista de conversas — só em conversas que o
+ * usuário não está vendo no momento. Devolve null quando não há o que mostrar.
+ */
+function previewRascunho(chaveConversa) {
+  const memento = gerenciadorRascunhos?.obter(chaveConversa);
+  if (!memento || conversaEmVista(chaveConversa)) return null;
+
+  return `<span class="conv-preview-rascunho">Rascunho:</span> ${escapeHtml(memento.previa())}`;
 }
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
